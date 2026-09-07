@@ -1,0 +1,217 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1" />
+<title>سياسة الخصوصية | Radka</title>
+<style>
+  :root {
+    --ink: #12241f;
+    --ink-soft: #3f564e;
+    --paper: #f6f4ee;
+    --paper-raised: #ffffff;
+    --line: #d9d3c4;
+    --palm: #1f5f4f;
+    --palm-deep: #123c32;
+    --palm-tint: #e4efe9;
+    --gold: #c98a3a;
+    --gold-tint: #f7ecd9;
+    --ok: #2f7a4f;
+    --font: -apple-system, BlinkMacSystemFont, "Segoe UI", Tahoma, Arial, sans-serif;
+    --font-mono: "Courier New", monospace;
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0;
+    background: var(--paper);
+    color: var(--ink);
+    font-family: var(--font);
+    line-height: 1.85;
+    font-size: 15.5px;
+  }
+  .topbar {
+    background: var(--palm-deep);
+    color: #eef4f1;
+    padding: 22px 20px;
+    display: flex;
+    align-items: center;
+    gap: 12px;
+  }
+  .glyph {
+    width: 40px; height: 40px;
+    border-radius: 10px;
+    background: var(--gold);
+    color: #2a1c08;
+    display: flex; align-items: center; justify-content: center;
+    font-weight: 800; font-size: 16px;
+    flex-shrink: 0;
+  }
+  .topbar h1 { font-size: 17px; margin: 0; }
+  .topbar p { font-size: 12.5px; margin: 2px 0 0; opacity: .75; }
+  .wrap {
+    max-width: 760px;
+    margin: 0 auto;
+    padding: 28px 20px 60px;
+  }
+  .updated {
+    background: var(--gold-tint);
+    border: 1px solid var(--gold);
+    color: #6b4718;
+    padding: 10px 14px;
+    border-radius: 10px;
+    font-size: 13px;
+    margin-bottom: 28px;
+    display: inline-block;
+  }
+  .panel {
+    background: var(--paper-raised);
+    border: 1px solid var(--line);
+    border-radius: 14px;
+    padding: 22px 22px;
+    margin-bottom: 18px;
+  }
+  .panel h2 {
+    font-size: 16.5px;
+    color: var(--palm-deep);
+    margin: 0 0 10px;
+    display: flex; align-items: center; gap: 8px;
+  }
+  .panel h2 .n {
+    background: var(--palm-tint);
+    color: var(--palm);
+    width: 26px; height: 26px;
+    border-radius: 7px;
+    display: flex; align-items: center; justify-content: center;
+    font-size: 13px; font-weight: 800;
+    flex-shrink: 0;
+  }
+  .panel p, .panel li { color: var(--ink-soft); font-size: 14.5px; }
+  .panel ul { margin: 8px 0 0; padding-inline-start: 20px; }
+  .panel li { margin-bottom: 6px; }
+  code {
+    font-family: var(--font-mono);
+    background: var(--palm-tint);
+    padding: 2px 6px;
+    border-radius: 5px;
+    font-size: 13px;
+    color: var(--palm-deep);
+  }
+  a { color: var(--palm); }
+  .contact-box {
+    background: var(--palm-tint);
+    border-radius: 12px;
+    padding: 16px 18px;
+    margin-top: 8px;
+  }
+  .foot {
+    text-align: center;
+    color: var(--ink-soft);
+    font-size: 12.5px;
+    margin-top: 30px;
+  }
+</style>
+</head>
+<body>
+
+<div class="topbar">
+  <div class="glyph">وب</div>
+  <div>
+    <h1>Radka — لوحة متاجر واتساب</h1>
+    <p>سياسة الخصوصية</p>
+  </div>
+</div>
+
+<div class="wrap">
+  <span class="updated">آخر تحديث: 7 سبتمبر 2026</span>
+
+  <div class="panel">
+    <h2><span class="n">1</span> مقدمة</h2>
+    <p>
+      توضح هذه السياسة كيف تقوم منصة <b>Radka</b> ("المنصة"، "نحن") بجمع واستخدام وحماية بيانات
+      أصحاب المتاجر والمستخدمين الذين يربطون حساباتهم على واتساب وماسنجر وانستغرام من خلال المنصة،
+      وذلك لتقديم خدمة الرد الآلي بالذكاء الاصطناعي على رسائل عملائهم.
+    </p>
+  </div>
+
+  <div class="panel">
+    <h2><span class="n">2</span> البيانات التي نجمعها</h2>
+    <ul>
+      <li><b>بيانات حساب التاجر:</b> الاسم، رقم الهاتف، بيانات تسجيل الدخول للوحة التحكم.</li>
+      <li><b>بيانات المنتجات والطلبات:</b> ما يضيفه التاجر من منتجات، وطلبات الزبائن المستلمة عبر البوت.</li>
+      <li><b>بيانات ربط القنوات:</b> عند ربط واتساب عبر رمز QR، أو ربط صفحة فيسبوك (ماسنجر) وحساب انستغرام
+        عبر تسجيل الدخول بفيسبوك (Facebook Login)، نحصل على رمز وصول (Access Token) خاص بالصفحة
+        لغرض إرسال واستقبال الرسائل نيابة عن التاجر فقط.</li>
+      <li><b>محتوى الرسائل:</b> نصوص المحادثات بين عملاء التاجر والبوت، تُستخدم لتوليد الردود عبر
+        نموذج الذكاء الاصطناعي وحفظ سجل الطلبات.</li>
+      <li><b>بيانات تقنية:</b> عنوان IP وسجلات الخادم لأغراض الأمان واستكشاف الأخطاء.</li>
+    </ul>
+  </div>
+
+  <div class="panel">
+    <h2><span class="n">3</span> كيف نستخدم البيانات</h2>
+    <ul>
+      <li>تشغيل الرد الآلي بالذكاء الاصطناعي على رسائل واتساب وماسنجر وانستغرام الخاصة بكل متجر.</li>
+      <li>عرض الطلبات والزبائن داخل لوحة تحكم التاجر.</li>
+      <li>تحسين جودة الخدمة وإصلاح الأعطال التقنية.</li>
+      <li>التواصل مع التاجر بخصوص حسابه أو الشكاوى المُقدَّمة.</li>
+    </ul>
+    <p>
+      نحن <b>لا نبيع</b> بيانات المستخدمين أو الرسائل لأي طرف ثالث، ولا نستخدمها لأغراض إعلانية.
+    </p>
+  </div>
+
+  <div class="panel">
+    <h2><span class="n">4</span> صلاحيات فيسبوك / انستغرام</h2>
+    <p>
+      عند ربط صفحة فيسبوك أو حساب انستغرام عبر المنصة، نطلب فقط الصلاحيات اللازمة لإرسال واستقبال
+      رسائل العملاء (<code>pages_messaging</code>, <code>pages_show_list</code>,
+      <code>instagram_basic</code>, <code>instagram_manage_messages</code>). لا نصل إلى منشورات
+      الصفحة، إعلاناتها، أو أي بيانات أخرى خارج نطاق الرسائل المباشرة. يمكن لصاحب الصفحة إلغاء هذه
+      الصلاحية في أي وقت من إعدادات فيسبوك الخاصة به (الإعدادات ← التطبيقات والمواقع الإلكترونية).
+    </p>
+  </div>
+
+  <div class="panel">
+    <h2><span class="n">5</span> تخزين البيانات وحمايتها</h2>
+    <ul>
+      <li>تُخزَّن البيانات على خوادم Supabase وFly.io، وتُحفظ رموز الوصول (Access Tokens) بشكل مشفّر
+        ولا تظهر أبدًا في واجهة المستخدم.</li>
+      <li>لا يمكن الوصول إلى رموز الوصول إلا من الخادم الخلفي للمنصة، ولا يُعرض أي منها في الواجهة الأمامية.</li>
+      <li>نتخذ إجراءات أمنية معقولة لحماية البيانات من الوصول غير المصرّح به، دون أن نضمن أمانًا مطلقًا
+        (كما هو الحال في أي خدمة إلكترونية).</li>
+    </ul>
+  </div>
+
+  <div class="panel">
+    <h2><span class="n">6</span> حذف البيانات</h2>
+    <p>
+      يمكن لصاحب المتجر طلب حذف بياناته وحسابه بالكامل (بما في ذلك رموز الوصول المرتبطة، الطلبات،
+      وسجل المحادثات) بالتواصل معنا عبر البريد أدناه. سنقوم بحذف البيانات خلال مدة معقولة من استلام الطلب.
+    </p>
+    <p>
+      كما يمكن لأي مستخدم فيسبوك إلغاء ربط صفحته بالمنصة مباشرة من إعدادات فيسبوك، وسيؤدي ذلك إلى
+      إيقاف وصول المنصة لرسائل تلك الصفحة فورًا.
+    </p>
+  </div>
+
+  <div class="panel">
+    <h2><span class="n">7</span> التعديلات على هذه السياسة</h2>
+    <p>
+      قد نقوم بتحديث هذه السياسة من وقت لآخر. سيتم نشر أي تعديل على هذه الصفحة مع تحديث تاريخ آخر تحديث أعلاه.
+    </p>
+  </div>
+
+  <div class="panel">
+    <h2><span class="n">8</span> التواصل معنا</h2>
+    <p>لأي استفسار يخص الخصوصية أو طلب حذف بيانات:</p>
+    <div class="contact-box">
+      البريد الإلكتروني: <b>your-email@example.com</b><br>
+      الموقع: <a href="https://radka-zeta.vercel.app">radka-zeta.vercel.app</a>
+    </div>
+  </div>
+
+  <div class="foot">© 2026 Radka. جميع الحقوق محفوظة.</div>
+</div>
+
+</body>
+</html>
