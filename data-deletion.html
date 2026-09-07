@@ -1,0 +1,221 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1" />
+<title>حذف بيانات المستخدم | Radka</title>
+<style>
+  :root {
+    --ink: #12241f;
+    --ink-soft: #3f564e;
+    --paper: #f6f4ee;
+    --paper-raised: #ffffff;
+    --line: #d9d3c4;
+    --palm: #1f5f4f;
+    --palm-deep: #123c32;
+    --palm-tint: #e4efe9;
+    --gold: #c98a3a;
+    --gold-tint: #f7ecd9;
+    --ok: #2f7a4f;
+    --bad: #b23b3b;
+    --bad-tint: #f8e6e6;
+    --font: -apple-system, BlinkMacSystemFont, "Segoe UI", Tahoma, Arial, sans-serif;
+    --font-mono: "Courier New", monospace;
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0;
+    background: var(--paper);
+    color: var(--ink);
+    font-family: var(--font);
+    line-height: 1.85;
+    font-size: 15.5px;
+  }
+  .topbar {
+    background: var(--palm-deep);
+    color: #eef4f1;
+    padding: 22px 20px;
+    display: flex;
+    align-items: center;
+    gap: 12px;
+  }
+  .glyph {
+    width: 40px; height: 40px;
+    border-radius: 10px;
+    background: var(--gold);
+    color: #2a1c08;
+    display: flex; align-items: center; justify-content: center;
+    font-weight: 800; font-size: 16px;
+    flex-shrink: 0;
+  }
+  .topbar h1 { font-size: 17px; margin: 0; }
+  .topbar p { font-size: 12.5px; margin: 2px 0 0; opacity: .75; }
+  .wrap {
+    max-width: 760px;
+    margin: 0 auto;
+    padding: 28px 20px 60px;
+  }
+  .updated {
+    background: var(--gold-tint);
+    border: 1px solid var(--gold);
+    color: #6b4718;
+    padding: 10px 14px;
+    border-radius: 10px;
+    font-size: 13px;
+    margin-bottom: 28px;
+    display: inline-block;
+  }
+  .panel {
+    background: var(--paper-raised);
+    border: 1px solid var(--line);
+    border-radius: 14px;
+    padding: 22px 22px;
+    margin-bottom: 18px;
+  }
+  .panel h2 {
+    font-size: 16.5px;
+    color: var(--palm-deep);
+    margin: 0 0 10px;
+    display: flex; align-items: center; gap: 8px;
+  }
+  .panel h2 .n {
+    background: var(--palm-tint);
+    color: var(--palm);
+    width: 26px; height: 26px;
+    border-radius: 7px;
+    display: flex; align-items: center; justify-content: center;
+    font-size: 13px; font-weight: 800;
+    flex-shrink: 0;
+  }
+  .panel p, .panel li { color: var(--ink-soft); font-size: 14.5px; }
+  .panel ul, .panel ol { margin: 8px 0 0; padding-inline-start: 20px; }
+  .panel li { margin-bottom: 8px; }
+  code {
+    font-family: var(--font-mono);
+    background: var(--palm-tint);
+    padding: 2px 6px;
+    border-radius: 5px;
+    font-size: 13px;
+    color: var(--palm-deep);
+  }
+  a { color: var(--palm); }
+  .contact-box {
+    background: var(--palm-tint);
+    border-radius: 12px;
+    padding: 16px 18px;
+    margin-top: 8px;
+  }
+  .warn-box {
+    background: var(--bad-tint);
+    border: 1px solid #e0b3b3;
+    color: #7a2b2b;
+    border-radius: 12px;
+    padding: 14px 16px;
+    margin-top: 12px;
+    font-size: 13.5px;
+  }
+  .step-btn {
+    display: inline-block;
+    background: var(--palm);
+    color: #fff;
+    padding: 10px 18px;
+    border-radius: 9px;
+    font-size: 14px;
+    font-weight: 700;
+    margin-top: 10px;
+    text-decoration: none;
+  }
+  .foot {
+    text-align: center;
+    color: var(--ink-soft);
+    font-size: 12.5px;
+    margin-top: 30px;
+  }
+</style>
+</head>
+<body>
+
+<div class="topbar">
+  <div class="glyph">وب</div>
+  <div>
+    <h1>Radka — لوحة متاجر واتساب</h1>
+    <p>كيفية حذف بيانات المستخدم</p>
+  </div>
+</div>
+
+<div class="wrap">
+  <span class="updated">آخر تحديث: 7 سبتمبر 2026</span>
+
+  <div class="panel">
+    <h2><span class="n">1</span> ما البيانات التي نحتفظ بها</h2>
+    <p>
+      تُخزَّن جميع بيانات حسابك على منصة <b>Radka</b> (بيانات المتجر، المنتجات، الطلبات، سجل
+      المحادثات، ورموز ربط قنوات واتساب/ماسنجر/انستغرام) في قاعدة بيانات <b>Supabase</b> الخاصة
+      بالمنصة. لا يُحتفظ بأي نسخة من بياناتك خارج هذه القاعدة.
+    </p>
+  </div>
+
+  <div class="panel">
+    <h2><span class="n">2</span> طريقة طلب حذف البيانات</h2>
+    <p>يمكنك طلب حذف بياناتك بالكامل بإحدى الطريقتين التاليتين:</p>
+    <ol>
+      <li>
+        <b>من داخل لوحة تحكم المتجر (الطريقة الأسرع):</b>
+        سجّل الدخول إلى لوحتك ← انتقل إلى تبويب <b>"تقديم شكوى"</b> ← اكتب في موضوع الشكوى
+        <b>"طلب حذف بيانات"</b>، ووضّح في التفاصيل أنك تريد حذف حسابك وكل بياناتك نهائيًا ← اضغط
+        <b>إرسال الشكوى</b>. سيصل الطلب مباشرة إلى المشرف العام الذي سيقوم بحذف بياناتك يدويًا من
+        Supabase.
+      </li>
+      <li>
+        <b>عبر البريد الإلكتروني:</b> إن لم تتمكن من الدخول إلى حسابك، راسلنا مباشرة على البريد
+        أدناه من نفس رقم الهاتف المسجّل، مع ذكر طلب حذف الحساب.
+      </li>
+    </ol>
+  </div>
+
+  <div class="panel">
+    <h2><span class="n">3</span> ما الذي يُحذف تحديدًا</h2>
+    <ul>
+      <li>بيانات حسابك (الاسم، رقم الهاتف، كلمة المرور).</li>
+      <li>جميع المنتجات والطلبات المرتبطة بمتجرك.</li>
+      <li>سجل محادثات الذكاء الاصطناعي مع عملائك.</li>
+      <li>رموز الوصول (Access Tokens) الخاصة بربط واتساب / ماسنجر / انستغرام — يتم إبطالها وحذفها فورًا.</li>
+    </ul>
+    <div class="warn-box">
+      ⚠️ الحذف نهائي ولا يمكن التراجع عنه. بعد تنفيذ الطلب، لن تتمكن من استعادة أي من بياناتك أو
+      سجل طلباتك السابقة.
+    </div>
+  </div>
+
+  <div class="panel">
+    <h2><span class="n">4</span> إلغاء ربط صفحة فيسبوك / انستغرام بشكل مستقل</h2>
+    <p>
+      بالإضافة إلى طلب الحذف من المنصة، يمكنك في أي وقت إلغاء صلاحية وصول تطبيق Radka إلى صفحتك
+      مباشرة من إعدادات فيسبوك، دون الحاجة لانتظار رد المنصة:
+    </p>
+    <p>فيسبوك ← الإعدادات والخصوصية ← الإعدادات ← الأمان ← التطبيقات والمواقع الإلكترونية ← ابحث عن التطبيق ← إزالة.</p>
+    <p>سيؤدي هذا إلى إيقاف وصول المنصة لرسائل صفحتك فورًا، بشكل مستقل تمامًا عن حذف حساب Radka.</p>
+  </div>
+
+  <div class="panel">
+    <h2><span class="n">5</span> المدة الزمنية</h2>
+    <p>
+      تتم مراجعة طلبات حذف البيانات وتنفيذها خلال مدة أقصاها <b>7 أيام عمل</b> من استلام الطلب.
+      سنؤكد لك عبر رقم هاتفك المسجّل عند اكتمال الحذف.
+    </p>
+  </div>
+
+  <div class="panel">
+    <h2><span class="n">6</span> التواصل معنا</h2>
+    <p>لأي استفسار يخص حذف البيانات:</p>
+    <div class="contact-box">
+      البريد الإلكتروني: <b>mohamedhadi20220@example.com</b><br>
+      أو عبر تبويب "تقديم شكوى" داخل لوحة تحكم متجرك.
+    </div>
+  </div>
+
+  <div class="foot">© 2026 Radka. جميع الحقوق محفوظة.</div>
+</div>
+
+</body>
+</html>
