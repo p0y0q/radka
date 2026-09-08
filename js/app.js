@@ -9,11 +9,15 @@ const state = {
   complaints: [],
   announcements: [],
   apiSettings: {},
-  productsDraft: [],  // منتجات مؤقتة أثناء تعديل/إضافة متجر
+  productsDraft: [],  // منتجات مؤقتة أثناء تعديل/إضافة متجر (لوحة الأدمن)
   editingStoreId: null,
   ordersFilter: "all",
   waPollTimer: null,  // مؤقت فحص حالة ربط واتساب (لوحة المتجر)
   adminWaPollTimer: null, // مؤقت تحديث شارات الربط بلوحة الأدمن
+  products: [],        // منتجات متجر التاجر الحالي (تبويب المنتجات)
+  productsFilter: "all",
+  productCategoryFilter: "",
+  editingProductId: null,
 };
 
 // ---------------------------------------------------------
@@ -35,6 +39,33 @@ function fmtTime(iso) {
   if (!iso) return "—";
   const d = new Date(iso);
   return d.toLocaleString("ar-IQ", { day: "2-digit", month: "2-digit", year: "numeric", hour: "2-digit", minute: "2-digit" });
+}
+
+// تنسيق سنة/شهر/يوم فقط (يُستخدم بجدول الطلبات والطباعة حسب الطلب)
+function fmtDate(iso) {
+  if (!iso) return "—";
+  const d = new Date(iso);
+  const y = d.getFullYear();
+  const m = String(d.getMonth() + 1).padStart(2, "0");
+  const day = String(d.getDate()).padStart(2, "0");
+  return `${y}/${m}/${day}`;
+}
+
+// تنسيق السعر مع الخصم بين قوسين إن وُجد
+function fmtPrice(unitPrice, discountPercent) {
+  if (unitPrice === null || unitPrice === undefined || unitPrice === "") return "—";
+  const price = Number(unitPrice).toLocaleString("ar-IQ");
+  if (discountPercent && Number(discountPercent) > 0) {
+    return `${price} (خصم ${Number(discountPercent)}%)`;
+  }
+  return price;
+}
+
+// مكان الطلب: يجمع بين نوع القناة والاسم الفعلي المخزّن وقت الطلب
+const CHANNEL_LABELS = { whatsapp: "واتساب", messenger: "ماسنجر", instagram: "انستغرام" };
+function fmtOrderPlace(order) {
+  const label = CHANNEL_LABELS[order.type] || order.type || "—";
+  return order.channel_name ? `${label} — ${escapeHtml(order.channel_name)}` : label;
 }
 
 function statusBadge(status) {
@@ -261,12 +292,12 @@ function renderAdminOverview() {
   wireStoreCardButtons("#admin-recent-stores");
 }
 
-function storeOrderCount(aiPhone) {
-  return state.orders.filter(o => o.ai_phone === aiPhone).length;
+function storeOrderCount(storeId) {
+  return state.orders.filter(o => o.store_id === storeId).length;
 }
 
 function storeCardHtml(s) {
-  const orderCount = storeOrderCount(s.ai_phone);
+  const orderCount = storeOrderCount(s.id);
   return `
   <div class="store-card" data-id="${s.id}">
     <div class="top">
@@ -476,7 +507,7 @@ function openCustomersModal(storeId) {
   const s = state.stores.find(x => x.id === storeId);
   if (!s) return;
   $("#customers-modal-title").textContent = `زبائن متجر: ${s.store_name}`;
-  const rows = state.orders.filter(o => o.ai_phone === s.ai_phone);
+  const rows = state.orders.filter(o => o.store_id === s.id);
   $("#admin-customers-tbody").innerHTML = rows.length ? rows.map(o => `
     <tr>
       <td>${escapeHtml(o.name || '—')}</td>
@@ -639,6 +670,7 @@ async function enterStore() {
   await loadStoreData();
   renderStoreOverview();
   renderStoreInfo();
+  renderProductsTab();
   renderMyComplaints();
   renderStoreAnnouncementBanner();
   setChannelCardStatus("wa", "disconnected", "غير متصل");
@@ -649,15 +681,17 @@ async function enterStore() {
 }
 
 async function loadStoreData() {
-  const aiPhone = state.session.data.ai_phone;
+  const storeId = state.session.data.id;
   try {
-    const [orders, complaints, announcements] = await Promise.all([
-      SB.select("orders", `ai_phone=eq.${encodeURIComponent(aiPhone)}&select=*&order=created_at.desc`),
-      SB.select("complaints", `store_id=eq.${state.session.data.id}&select=*&order=created_at.desc`),
-      SB.select("announcements", `store_id=eq.${state.session.data.id}&select=*&order=created_at.desc`),
+    const [orders, complaints, announcements, products] = await Promise.all([
+      SB.select("orders", `store_id=eq.${storeId}&select=*&order=created_at.desc`),
+      SB.select("complaints", `store_id=eq.${storeId}&select=*&order=created_at.desc`),
+      SB.select("announcements", `store_id=eq.${storeId}&select=*&order=created_at.desc`),
+      SB.select("products", `store_id=eq.${storeId}&select=*&order=created_at.desc`),
     ]);
     state.orders = orders;
     state.complaints = complaints;
+    state.products = products;
 
     // نجيب أيضا الإعلانات العامة (store_id فاضي)
     const generalAnn = await SB.select("announcements", "store_id=is.null&select=*&order=created_at.desc&limit=5");
@@ -673,6 +707,7 @@ $all(".nav-item[data-tab^='s-']").forEach(btn => {
     switchTab("s", btn.dataset.tab, "store-sidebar");
     if (btn.dataset.tab === "s-whatsapp") { refreshWaStatus(); refreshMetaStatus(); }
     if (btn.dataset.tab === "s-ai") renderStoreAiSettingsTab();
+    if (btn.dataset.tab === "s-products") renderProductsTab();
   });
 });
 
@@ -716,9 +751,13 @@ function renderOrdersTable() {
       <td>${escapeHtml(o.name || '—')}</td>
       <td>${escapeHtml(o.location || '—')}</td>
       <td style="font-family:var(--font-mono)">${escapeHtml(o.phone || '—')}</td>
-      <td>${escapeHtml(o.order_type || '—')}</td>
+      <td>${escapeHtml(o.product_name || o.order_type || '—')}</td>
+      <td>${escapeHtml(o.order_variant || '—')}</td>
+      <td>${fmtPrice(o.unit_price, o.discount_percent)}</td>
+      <td>${o.quantity ?? 1}</td>
       <td>${escapeHtml(o.notes || '—')}</td>
-      <td>${fmtTime(o.created_at)}</td>
+      <td>${fmtOrderPlace(o)}</td>
+      <td>${fmtDate(o.created_at)}</td>
       <td>${statusBadge(o.status)}</td>
       <td class="row-actions">
         ${o.status !== 'completed' ? `<button class="btn btn-ok btn-sm" data-complete="${o.id}">إنجاز</button>` : ''}
@@ -786,6 +825,202 @@ function renderMyComplaints() {
       ${c.status === 'resolved' ? '<span class="badge ok">تم الحل</span>' : '<span class="badge wait">قيد المراجعة</span>'}
     </div>
   `).join("") : `<div class="empty-state"><p>لم تقدّم أي شكوى بعد</p></div>`;
+}
+
+// ---------------------------------------------------------
+// المنتجات (لوحة التاجر) — عرض، بحث، تصفية، إضافة/تعديل/حذف
+// ---------------------------------------------------------
+
+// عدد مرات طلب كل منتج (بالاعتماد على مطابقة اسم المنتج بجدول orders)
+function productOrderCount(productName) {
+  if (!productName) return 0;
+  return state.orders.filter(o => (o.product_name || o.order_type || "") === productName)
+    .reduce((sum, o) => sum + (o.quantity || 1), 0);
+}
+
+function renderProductsTab() {
+  // تحديث قائمة الفئات المتاحة (select + datalist)
+  const categories = [...new Set(state.products.map(p => p.category).filter(Boolean))].sort();
+  const catSelect = $("#product-category-filter");
+  const currentCatValue = state.productCategoryFilter;
+  catSelect.innerHTML = `<option value="">كل الفئات</option>` + categories.map(c => `<option value="${escapeHtml(c)}">${escapeHtml(c)}</option>`).join("");
+  catSelect.value = currentCatValue;
+  $("#p-category-list").innerHTML = categories.map(c => `<option value="${escapeHtml(c)}">`).join("");
+
+  // إحصائيات سريعة
+  const outOfStock = state.products.filter(p => (p.stock_quantity ?? 0) <= 0).length;
+  const lowStock = state.products.filter(p => (p.stock_quantity ?? 0) > 0 && (p.stock_quantity ?? 0) <= 5).length;
+  $("#products-stats").innerHTML = `
+    <div class="stat-card"><div class="num">${state.products.length}</div><div class="lbl">إجمالي المنتجات</div></div>
+    <div class="stat-card wait"><div class="num">${lowStock}</div><div class="lbl">قريبة النفاذ (≤5)</div></div>
+    <div class="stat-card bad"><div class="num">${outOfStock}</div><div class="lbl">منتهية الكمية</div></div>
+  `;
+
+  renderProductsGrid();
+}
+
+function renderProductsGrid() {
+  const q = ($("#product-search").value || "").trim().toLowerCase();
+  const cat = $("#product-category-filter").value;
+  let list = [...state.products];
+
+  if (cat) list = list.filter(p => p.category === cat);
+  if (q) {
+    list = list.filter(p =>
+      (p.name || "").toLowerCase().includes(q) ||
+      String(p.price || "").includes(q) ||
+      (p.variant_type || "").toLowerCase().includes(q)
+    );
+  }
+
+  if (state.productsFilter === "low_stock") {
+    list = list.filter(p => (p.stock_quantity ?? 0) > 0 && (p.stock_quantity ?? 0) <= 5);
+  } else if (state.productsFilter === "out_of_stock") {
+    list = list.filter(p => (p.stock_quantity ?? 0) <= 0);
+  } else if (state.productsFilter === "most_ordered") {
+    list = list.map(p => ({ ...p, _count: productOrderCount(p.name) })).sort((a, b) => b._count - a._count);
+  } else if (state.productsFilter === "least_ordered") {
+    list = list.map(p => ({ ...p, _count: productOrderCount(p.name) })).sort((a, b) => a._count - b._count);
+  }
+
+  $("#products-empty").classList.toggle("hidden", list.length !== 0);
+  $("#products-count-label").textContent = `${state.products.length} منتج`;
+
+  $("#products-grid").innerHTML = list.map(p => productCardHtml(p)).join("");
+
+  $all("#products-grid [data-edit-product]").forEach(b => b.addEventListener("click", () => openProductModal(b.dataset.editProduct)));
+  $all("#products-grid [data-delete-product]").forEach(b => b.addEventListener("click", () => deleteProduct(b.dataset.deleteProduct)));
+  $all("#products-grid [data-restock]").forEach(b => b.addEventListener("click", () => restockProduct(b.dataset.restock)));
+}
+
+function productCardHtml(p) {
+  const stock = p.stock_quantity ?? 0;
+  const stockBadge = stock <= 0
+    ? `<span class="badge bad">نفذت الكمية</span>`
+    : stock <= 5
+      ? `<span class="badge wait">قريبة النفاذ (${stock})</span>`
+      : `<span class="badge ok">متوفر (${stock})</span>`;
+  const priceLine = fmtPrice(p.price, p.discount_percent);
+  const orderCount = productOrderCount(p.name);
+
+  return `
+  <div class="store-card" data-id="${p.id}">
+    <div class="top">
+      <div>
+        <h4>${escapeHtml(p.name)}</h4>
+        <div class="meta">${escapeHtml(p.category || "بدون فئة")}${p.variant_type ? " — " + escapeHtml(p.variant_type) : ""}</div>
+      </div>
+    </div>
+    <div class="stat-line">
+      <span>السعر: <b>${priceLine}</b></span>
+      <span>الطلبات: <b>${orderCount}</b></span>
+    </div>
+    <div>${stockBadge}</div>
+    <div class="actions">
+      <button class="btn btn-outline btn-sm" data-edit-product="${p.id}">تعديل</button>
+      <button class="btn btn-outline btn-sm" data-restock="${p.id}">إعادة شحن</button>
+      <button class="btn btn-bad btn-sm" data-delete-product="${p.id}">حذف</button>
+    </div>
+  </div>`;
+}
+
+$("#product-search").addEventListener("input", renderProductsGrid);
+$("#product-category-filter").addEventListener("change", () => {
+  state.productCategoryFilter = $("#product-category-filter").value;
+  renderProductsGrid();
+});
+$all("#products-filter-tabs .tab-btn").forEach(b => b.addEventListener("click", () => {
+  $all("#products-filter-tabs .tab-btn").forEach(x => x.classList.remove("active"));
+  b.classList.add("active");
+  state.productsFilter = b.dataset.pfilter;
+  renderProductsGrid();
+}));
+
+$("#btn-add-product").addEventListener("click", () => openProductModal(null));
+
+function openProductModal(productId) {
+  state.editingProductId = productId;
+  const p = productId ? state.products.find(x => x.id === productId) : null;
+
+  $("#product-modal-title").textContent = p ? "تعديل المنتج" : "إضافة منتج جديد";
+  $("#p-name").value = p?.name || "";
+  $("#p-category").value = p?.category || "";
+  $("#p-variant-type").value = p?.variant_type || "";
+  $("#p-price").value = p?.price ?? "";
+  $("#p-discount").value = p?.discount_percent ?? "";
+  $("#p-stock").value = p?.stock_quantity ?? 0;
+  $("#p-video").value = p?.video_url || "";
+  $("#p-description").value = p?.description || "";
+
+  $("#modal-product").classList.add("show");
+}
+
+$("#save-product-btn").addEventListener("click", async () => {
+  const name = $("#p-name").value.trim();
+  if (!name) { toast("الرجاء إدخال اسم المنتج", "bad"); return; }
+
+  const payload = {
+    name,
+    category: $("#p-category").value.trim() || null,
+    variant_type: $("#p-variant-type").value.trim() || null,
+    price: $("#p-price").value ? Number($("#p-price").value) : null,
+    discount_percent: $("#p-discount").value ? Number($("#p-discount").value) : null,
+    stock_quantity: $("#p-stock").value ? Number($("#p-stock").value) : 0,
+    video_url: $("#p-video").value.trim() || null,
+    description: $("#p-description").value.trim() || null,
+  };
+
+  const btn = $("#save-product-btn");
+  btn.disabled = true; btn.textContent = "جارٍ الحفظ...";
+
+  try {
+    if (state.editingProductId) {
+      await SB.update("products", `id=eq.${state.editingProductId}`, payload);
+    } else {
+      await SB.insert("products", { ...payload, store_id: state.session.data.id });
+    }
+    toast("تم حفظ المنتج بنجاح", "ok");
+    $("#modal-product").classList.remove("show");
+    await loadStoreData();
+    renderProductsTab();
+  } catch (err) {
+    console.error(err);
+    toast("تعذر حفظ المنتج", "bad");
+  } finally {
+    btn.disabled = false; btn.textContent = "حفظ المنتج";
+  }
+});
+
+async function deleteProduct(id) {
+  if (!confirm("هل أنت متأكد من حذف هذا المنتج؟")) return;
+  try {
+    await SB.remove("products", `id=eq.${id}`);
+    toast("تم حذف المنتج", "ok");
+    await loadStoreData();
+    renderProductsTab();
+  } catch (err) {
+    console.error(err);
+    toast("تعذر حذف المنتج", "bad");
+  }
+}
+
+async function restockProduct(id) {
+  const p = state.products.find(x => x.id === id);
+  if (!p) return;
+  const addStr = prompt("كم قطعة تريد إضافتها للمخزون؟", "10");
+  if (!addStr) return;
+  const add = Number(addStr);
+  if (!Number.isFinite(add) || add <= 0) { toast("رقم غير صالح", "bad"); return; }
+  try {
+    const newStock = (p.stock_quantity || 0) + add;
+    await SB.update("products", `id=eq.${id}`, { stock_quantity: newStock });
+    toast("تم تحديث المخزون", "ok");
+    await loadStoreData();
+    renderProductsTab();
+  } catch (err) {
+    console.error(err);
+    toast("تعذر تحديث المخزون", "bad");
+  }
 }
 
 // ---------------------------------------------------------
@@ -1081,29 +1316,34 @@ $("#btn-print").addEventListener("click", () => {
   const dateRangeLabel = fromDateStr ? ` — من تاريخ ${fromDateStr}` : "";
   const area = $("#print-area");
 
+  // ترتيب زمني تصاعدي (الأقدم أولاً) حتى يكون رقم الترتيب منطقيًا، ثم رقم تسلسلي يبدأ من 1
+  const ordered = [...rows].sort((a, b) => new Date(a.created_at) - new Date(b.created_at));
+
+  const orderLabel = o => escapeHtml([o.product_name || o.order_type, o.order_variant].filter(Boolean).join(" / ") || "—");
+  const priceQtyLabel = o => `${fmtPrice(o.unit_price, o.discount_percent)} / ${o.quantity ?? 1}`;
+
   if (mode === "table") {
     area.innerHTML = `
       <h2>${escapeHtml(state.session.data.store_name)} — ${statusLabel}${dateRangeLabel}</h2>
       <p>تاريخ الطباعة: ${new Date().toLocaleString("ar-IQ")}</p>
       <table class="print-table">
-        <thead><tr><th>الاسم</th><th>الموقع</th><th>الرقم</th><th>نوع الطلب</th><th>الحالة</th><th>الوقت</th></tr></thead>
+        <thead><tr><th>#</th><th>الاسم</th><th>الرقم</th><th>الطلب / نوع الطلب</th><th>السعر / الكمية</th><th>التوقيت</th></tr></thead>
         <tbody>
-          ${rows.map(o => `<tr><td>${escapeHtml(o.name || '')}</td><td>${escapeHtml(o.location || '')}</td><td>${escapeHtml(o.phone || '')}</td><td>${escapeHtml(o.order_type || '')}</td><td>${{pending:'بالانتظار',completed:'منجز',cancelled:'ملغي'}[o.status]||''}</td><td>${fmtTime(o.created_at)}</td></tr>`).join("")}
+          ${ordered.map((o, i) => `<tr><td>${i + 1}</td><td>${escapeHtml(o.name || '')}</td><td>${escapeHtml(o.phone || '')}</td><td>${orderLabel(o)}</td><td>${priceQtyLabel(o)}</td><td>${fmtDate(o.created_at)}</td></tr>`).join("")}
         </tbody>
       </table>`;
   } else {
     area.innerHTML = `
       <h2>${escapeHtml(state.session.data.store_name)} — بطاقات ${statusLabel}${dateRangeLabel}</h2>
       <div class="print-labels">
-        ${rows.map(o => `
+        ${ordered.map((o, i) => `
           <div class="print-label">
-            <h4>${escapeHtml(state.session.data.store_name)}</h4>
+            <h4>#${i + 1} — ${escapeHtml(state.session.data.store_name)}</h4>
             <p><b>الزبون:</b> ${escapeHtml(o.name || '—')}</p>
-            <p><b>الموقع:</b> ${escapeHtml(o.location || '—')}</p>
-            <p><b>الهاتف:</b> ${escapeHtml(o.phone || '—')}</p>
-            <p><b>الطلب:</b> ${escapeHtml(o.order_type || '—')}</p>
-            <p><b>الحالة:</b> ${{pending:'بالانتظار',completed:'منجز',cancelled:'ملغي'}[o.status]||''}</p>
-            <p><b>الوقت:</b> ${fmtTime(o.created_at)}</p>
+            <p><b>الرقم:</b> ${escapeHtml(o.phone || '—')}</p>
+            <p><b>الطلب:</b> ${orderLabel(o)}</p>
+            <p><b>السعر / الكمية:</b> ${priceQtyLabel(o)}</p>
+            <p><b>التوقيت:</b> ${fmtDate(o.created_at)}</p>
           </div>
         `).join("")}
       </div>`;
