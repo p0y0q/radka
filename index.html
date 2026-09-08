@@ -261,6 +261,7 @@
       </div>
 
       <button class="nav-item active" data-tab="s-orders"><span class="ic">▤</span> الطلبات</button>
+      <button class="nav-item" data-tab="s-products"><span class="ic">◫</span> المنتجات</button>
       <button class="nav-item" data-tab="s-whatsapp"><span class="ic">◉</span> ربط القنوات</button>
       <button class="nav-item" data-tab="s-ai"><span class="ic">✦</span> إعدادات الذكاء الاصطناعي</button>
       <button class="nav-item" data-tab="s-print"><span class="ic">⎙</span> الطباعة</button>
@@ -300,7 +301,7 @@
             <table>
               <thead>
                 <tr>
-                  <th>اسم الزبون</th><th>الموقع</th><th>الرقم</th><th>نوع الطلب</th><th>الملاحظات</th><th>الوقت</th><th>الحالة</th><th>إجراء</th>
+                  <th>اسم الزبون</th><th>الموقع</th><th>الرقم</th><th>الطلب</th><th>نوع الطلب</th><th>السعر</th><th>الكمية</th><th>الملاحظات</th><th>مكان الطلب</th><th>التوقيت</th><th>الحالة</th><th>إجراء</th>
                 </tr>
               </thead>
               <tbody id="orders-tbody"></tbody>
@@ -309,6 +310,49 @@
           <div class="empty-state hidden" id="orders-empty">
             <div class="glyph">▤</div>
             <p>لا توجد طلبات في هذا القسم حتى الآن</p>
+          </div>
+        </div>
+      </section>
+
+      <!-- المنتجات -->
+      <section class="tab-panel hidden" id="tab-s-products">
+        <div class="topbar">
+          <div>
+            <h2>المنتجات</h2>
+            <div class="sub">إدارة منتجات متجرك، المخزون، والفئات</div>
+          </div>
+          <button class="btn btn-primary" id="btn-add-product">+ أضف منتج</button>
+        </div>
+
+        <div class="stat-grid" id="products-stats"></div>
+
+        <div class="panel">
+          <div class="panel-head">
+            <div><h3>كل المنتجات</h3><div class="sub" id="products-count-label">0 منتج</div></div>
+            <input type="text" id="product-search" placeholder="بحث بالاسم أو السعر أو النوع..." style="padding:9px 13px;border-radius:8px;border:1.5px solid var(--line);font-size:13px;min-width:220px;">
+          </div>
+
+          <div class="tabs" id="products-filter-tabs" style="margin-bottom:14px;">
+            <button class="tab-btn active" data-pfilter="all">الكل</button>
+            <button class="tab-btn" data-pfilter="low_stock">قريبة النفاذ</button>
+            <button class="tab-btn" data-pfilter="out_of_stock">منتهية الكمية</button>
+            <button class="tab-btn" data-pfilter="most_ordered">الأكثر طلبًا</button>
+            <button class="tab-btn" data-pfilter="least_ordered">الأقل طلبًا</button>
+          </div>
+
+          <div class="form-grid" style="margin-bottom:14px;">
+            <div class="field">
+              <label>تصفية حسب الفئة</label>
+              <select id="product-category-filter">
+                <option value="">كل الفئات</option>
+              </select>
+            </div>
+          </div>
+
+          <div class="card-grid" id="products-grid"></div>
+          <div class="empty-state hidden" id="products-empty">
+            <div class="glyph">◫</div>
+            <p>لا توجد منتجات مطابقة</p>
           </div>
         </div>
       </section>
@@ -623,6 +667,55 @@
       <!-- ملاحظة: الحالة هنا هي حالة الطلب (منجز/ملغي)، وليست حالة ربط واتساب. حالة ربط واتساب تظهر ببطاقة المتجر بقائمة المتاجر. -->
         <tbody id="admin-customers-tbody"></tbody>
       </table>
+    </div>
+  </div>
+</div>
+
+<!-- مودال إضافة/تعديل منتج (لوحة التاجر) -->
+<div class="modal-backdrop" id="modal-product">
+  <div class="modal">
+    <div class="modal-head">
+      <h3 id="product-modal-title">إضافة منتج جديد</h3>
+      <button class="modal-close" data-close="modal-product">✕</button>
+    </div>
+    <div class="form-grid">
+      <div class="field" style="grid-column:1/-1;">
+        <label>اسم المنتج</label>
+        <input type="text" id="p-name" placeholder="مثال: فستان صيفي">
+      </div>
+      <div class="field">
+        <label>فئة المنتج</label>
+        <input type="text" id="p-category" placeholder="مثال: ملابس نسائية" list="p-category-list">
+        <datalist id="p-category-list"></datalist>
+      </div>
+      <div class="field">
+        <label>نوع المنتج (الخيارات المتاحة)</label>
+        <input type="text" id="p-variant-type" placeholder="مثال: أحمر، أزرق، أخضر أو S، M، L">
+      </div>
+      <div class="field">
+        <label>السعر</label>
+        <input type="number" id="p-price" placeholder="0" step="0.01">
+      </div>
+      <div class="field">
+        <label>نسبة الخصم % (اختياري)</label>
+        <input type="number" id="p-discount" placeholder="0" step="0.01" min="0" max="100">
+      </div>
+      <div class="field">
+        <label>كمية المخزون</label>
+        <input type="number" id="p-stock" placeholder="0" step="1" min="0">
+      </div>
+      <div class="field">
+        <label>رابط فيديو المنتج (اختياري)</label>
+        <input type="text" id="p-video" placeholder="رابط انستغرام/تيكتوك/يوتيوب...">
+      </div>
+      <div class="field" style="grid-column:1/-1;">
+        <label>وصف المنتج</label>
+        <textarea id="p-description" rows="3" placeholder="وصف مختصر للمنتج..."></textarea>
+      </div>
+    </div>
+    <div class="modal-foot">
+      <button class="btn btn-outline btn-sm" data-close="modal-product">إلغاء</button>
+      <button class="btn btn-primary btn-sm" id="save-product-btn">حفظ المنتج</button>
     </div>
   </div>
 </div>
