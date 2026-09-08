@@ -18,6 +18,7 @@ const state = {
   productsFilter: "all",
   productCategoryFilter: "",
   editingProductId: null,
+  aiPool: [],           // مفاتيح الذكاء الاصطناعي الاحتياطية (لوحة الأدمن فقط)
 };
 
 // ---------------------------------------------------------
@@ -238,12 +239,13 @@ async function enterAdmin() {
 
 async function loadAdminData() {
   try {
-    const [stores, orders, complaints, announcements, apiRows] = await Promise.all([
+    const [stores, orders, complaints, announcements, apiRows, aiPool] = await Promise.all([
       SB.select("stores", "select=*&order=created_at.desc"),
       SB.select("orders", "select=*&order=created_at.desc&limit=2000"),
       SB.select("complaints", "select=*&order=created_at.desc"),
       SB.select("announcements", "select=*&order=created_at.desc"),
       SB.select("api_settings", "select=*"),
+      SB.select("ai_provider_pool", "select=*&order=priority.asc"),
     ]);
     state.stores = stores;
     state.orders = orders;
@@ -251,6 +253,7 @@ async function loadAdminData() {
     state.announcements = announcements;
     state.apiSettings = {};
     apiRows.forEach(r => state.apiSettings[r.key_name] = r.key_value);
+    state.aiPool = aiPool;
   } catch (err) {
     console.error(err);
     toast("خطأ في تحميل بيانات لوحة المشرف", "bad");
@@ -572,7 +575,74 @@ function renderApiSettingsTab() {
       await loadAdminData(); renderApiSettingsTab();
     } catch (err) { console.error(err); toast("تعذر الحفظ", "bad"); }
   }));
+
+  renderAiPoolTable();
 }
+
+// ---------------------------------------------------------
+// مفاتيح الذكاء الاصطناعي الاحتياطية (Failover Pool) — لوحة الأدمن فقط
+// ---------------------------------------------------------
+function togglePoolBaseUrlField() {
+  $("#pool-baseurl-field").style.display = $("#pool-provider").value === "openrouter" ? "" : "none";
+}
+$("#pool-provider").addEventListener("change", togglePoolBaseUrlField);
+togglePoolBaseUrlField();
+
+function renderAiPoolTable() {
+  $("#ai-pool-tbody").innerHTML = state.aiPool.length ? state.aiPool.map(p => `
+    <tr>
+      <td>${p.priority}</td>
+      <td>${escapeHtml(p.label || '—')}</td>
+      <td>${p.provider === 'openrouter' ? 'OpenRouter' : 'Gemini'}</td>
+      <td style="font-family:var(--font-mono);font-size:12.5px;">${escapeHtml(p.model || '—')}</td>
+      <td>${p.enabled ? '<span class="badge ok">مفعّل</span>' : '<span class="badge wait">معطّل</span>'}</td>
+      <td class="row-actions">
+        <button class="btn btn-outline btn-sm" data-toggle-pool="${p.id}">${p.enabled ? 'تعطيل' : 'تفعيل'}</button>
+        <button class="btn btn-bad btn-sm" data-delete-pool="${p.id}">حذف</button>
+      </td>
+    </tr>
+  `).join("") : `<tr><td colspan="6" style="text-align:center;color:var(--ink-soft);padding:24px;">لا توجد مفاتيح احتياطية بعد</td></tr>`;
+
+  $all("[data-toggle-pool]").forEach(b => b.addEventListener("click", async () => {
+    const p = state.aiPool.find(x => x.id === b.dataset.togglePool);
+    try {
+      await SB.update("ai_provider_pool", `id=eq.${p.id}`, { enabled: !p.enabled });
+      await loadAdminData(); renderApiSettingsTab();
+    } catch (err) { console.error(err); toast("تعذر التحديث", "bad"); }
+  }));
+
+  $all("[data-delete-pool]").forEach(b => b.addEventListener("click", async () => {
+    if (!confirm("حذف هذا المفتاح الاحتياطي؟")) return;
+    try {
+      await SB.remove("ai_provider_pool", `id=eq.${b.dataset.deletePool}`);
+      toast("تم الحذف", "ok");
+      await loadAdminData(); renderApiSettingsTab();
+    } catch (err) { console.error(err); toast("تعذر الحذف", "bad"); }
+  }));
+}
+
+$("#add-pool-key").addEventListener("click", async () => {
+  const model = $("#pool-model").value.trim();
+  const apiKey = $("#pool-api-key").value.trim();
+  if (!model || !apiKey) { toast("الرجاء إدخال الموديل والمفتاح", "bad"); return; }
+
+  const payload = {
+    label: $("#pool-label").value.trim() || null,
+    provider: $("#pool-provider").value,
+    model,
+    api_key: apiKey,
+    base_url: $("#pool-provider").value === "openrouter" ? ($("#pool-base-url").value.trim() || "https://openrouter.ai/api/v1") : null,
+    priority: $("#pool-priority").value ? Number($("#pool-priority").value) : 0,
+    enabled: true,
+  };
+
+  try {
+    await SB.insert("ai_provider_pool", payload);
+    toast("تمت إضافة المفتاح الاحتياطي", "ok");
+    ["pool-label", "pool-model", "pool-api-key", "pool-base-url", "pool-priority"].forEach(id => $(`#${id}`).value = "");
+    await loadAdminData(); renderApiSettingsTab();
+  } catch (err) { console.error(err); toast("تعذر إضافة المفتاح", "bad"); }
+});
 
 async function upsertApiSetting(key_name, key_value) {
   const rows = await SB.select("api_settings", `key_name=eq.${key_name}&select=id`);
@@ -1253,19 +1323,15 @@ $("#btn-instagram-connect").addEventListener("click", () => startMetaOAuth("inst
 
 function renderStoreAiSettingsTab() {
   const s = state.session.data;
-  $("#store-ai-system-prompt").value = s.ai_system_prompt || "";
-  $("#store-use-global-api").checked = s.use_global_api !== false;
-  $("#store-ai-api-key").value = s.ai_api_key || "";
-  $("#store-ai-model").value = s.ai_model || "gemini-1.5-flash";
+  $("#store-ai-display-name").value = s.ai_display_name || "";
+  $("#store-ai-contact-info").value = s.ai_contact_info || "";
 }
 
 $("#save-store-ai-settings").addEventListener("click", async () => {
   const storeId = state.session.data.id;
   const patch = {
-    ai_system_prompt: $("#store-ai-system-prompt").value.trim(),
-    use_global_api: $("#store-use-global-api").checked,
-    ai_api_key: $("#store-ai-api-key").value.trim(),
-    ai_model: $("#store-ai-model").value,
+    ai_display_name: $("#store-ai-display-name").value.trim(),
+    ai_contact_info: $("#store-ai-contact-info").value.trim(),
   };
   try {
     const rows = await SB.update("stores", `id=eq.${storeId}`, patch);
