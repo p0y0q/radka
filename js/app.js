@@ -595,13 +595,14 @@ function renderAiPoolTable() {
       <td>${escapeHtml(p.label || '—')}</td>
       <td>${p.provider === 'openrouter' ? 'OpenRouter' : 'Gemini'}</td>
       <td style="font-family:var(--font-mono);font-size:12.5px;">${escapeHtml(p.model || '—')}</td>
+      <td>${p.max_rpm || 'افتراضي'}</td>
       <td>${p.enabled ? '<span class="badge ok">مفعّل</span>' : '<span class="badge wait">معطّل</span>'}</td>
       <td class="row-actions">
         <button class="btn btn-outline btn-sm" data-toggle-pool="${p.id}">${p.enabled ? 'تعطيل' : 'تفعيل'}</button>
         <button class="btn btn-bad btn-sm" data-delete-pool="${p.id}">حذف</button>
       </td>
     </tr>
-  `).join("") : `<tr><td colspan="6" style="text-align:center;color:var(--ink-soft);padding:24px;">لا توجد مفاتيح احتياطية بعد</td></tr>`;
+  `).join("") : `<tr><td colspan="7" style="text-align:center;color:var(--ink-soft);padding:24px;">لا توجد مفاتيح احتياطية بعد</td></tr>`;
 
   $all("[data-toggle-pool]").forEach(b => b.addEventListener("click", async () => {
     const p = state.aiPool.find(x => x.id === b.dataset.togglePool);
@@ -633,13 +634,14 @@ $("#add-pool-key").addEventListener("click", async () => {
     api_key: apiKey,
     base_url: $("#pool-provider").value === "openrouter" ? ($("#pool-base-url").value.trim() || "https://openrouter.ai/api/v1") : null,
     priority: $("#pool-priority").value ? Number($("#pool-priority").value) : 0,
+    max_rpm: $("#pool-max-rpm").value ? Number($("#pool-max-rpm").value) : null,
     enabled: true,
   };
 
   try {
     await SB.insert("ai_provider_pool", payload);
     toast("تمت إضافة المفتاح الاحتياطي", "ok");
-    ["pool-label", "pool-model", "pool-api-key", "pool-base-url", "pool-priority"].forEach(id => $(`#${id}`).value = "");
+    ["pool-label", "pool-model", "pool-api-key", "pool-base-url", "pool-priority", "pool-max-rpm"].forEach(id => $(`#${id}`).value = "");
     await loadAdminData(); renderApiSettingsTab();
   } catch (err) { console.error(err); toast("تعذر إضافة المفتاح", "bad"); }
 });
