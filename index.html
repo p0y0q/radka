@@ -127,19 +127,12 @@
         <div class="topbar">
           <div>
             <h2>إعدادات الذكاء الاصطناعي</h2>
-            <div class="sub">مفتاح API العام، وربط كل متجر بمفتاحه الخاص أو بالعام</div>
+            <div class="sub">مفتاح Gemini الأساسي، ومفتاح احتياطي واحد للضرورة القصوى فقط</div>
           </div>
         </div>
         <div class="panel">
-          <div class="panel-head"><h3>المفتاح العام (Global API Key)</h3></div>
-
-          <div class="role-switch" style="margin-bottom:16px;">
-            <button type="button" class="active" data-provider="gemini" id="provider-gemini-btn">Gemini (AI Studio)</button>
-            <button type="button" data-provider="openrouter" id="provider-openrouter-btn">OpenRouter</button>
-          </div>
-
-          <!-- فرع Gemini -->
-          <div id="provider-fields-gemini" class="form-grid">
+          <div class="panel-head"><h3>المفتاح الأساسي (Gemini)</h3></div>
+          <div class="form-grid">
             <div class="field" style="grid-column:1/-1;">
               <label>مفتاح Gemini (AI Studio)</label>
               <input type="text" id="gemini-api-key" placeholder="AQ.A******************************************" style="font-family:var(--font-mono)">
@@ -149,81 +142,33 @@
               <input type="text" id="gemini-model" placeholder="gemini-3.6-flash" style="font-family:var(--font-mono)">
             </div>
           </div>
-
-          <!-- فرع OpenRouter -->
-          <div id="provider-fields-openrouter" class="form-grid hidden">
-            <div class="field" style="grid-column:1/-1;">
-              <label>رابط OpenRouter (Base URL)</label>
-              <input type="text" id="openrouter-base-url" placeholder="https://openrouter.ai/api/v1" style="font-family:var(--font-mono)">
-            </div>
-            <div class="field" style="grid-column:1/-1;">
-              <label>مفتاح OpenRouter</label>
-              <input type="text" id="openrouter-api-key" placeholder="sk-**********************" style="font-family:var(--font-mono)">
-            </div>
-            <div class="field" style="grid-column:1/-1;">
-              <label>نوع الموديل</label>
-              <input type="text" id="openrouter-model" placeholder="مثال: openai/gpt-4o-mini" style="font-family:var(--font-mono)">
-            </div>
-          </div>
-
-          <div style="margin-top:14px;"><button class="btn btn-primary btn-sm" id="save-global-api">حفظ المفتاح العام</button></div>
+          <div style="margin-top:14px;"><button class="btn btn-primary btn-sm" id="save-global-api">حفظ المفتاح الأساسي</button></div>
         </div>
 
         <div class="panel">
           <div class="panel-head">
-            <div><h3>مفاتيح المتاجر</h3><div class="sub">حدد لكل متجر: استخدام المفتاح العام أو مفتاح خاص</div></div>
-          </div>
-          <div class="table-wrap">
-            <table>
-              <thead><tr><th>المتجر</th><th>الرقم</th><th>الوضع الحالي</th><th>مفتاح خاص</th><th>إجراء</th></tr></thead>
-              <tbody id="api-stores-tbody"></tbody>
-            </table>
-          </div>
-        </div>
-
-        <div class="panel">
-          <div class="panel-head">
-            <div><h3>مفاتيح احتياطية (Failover)</h3><div class="sub">عند عدم استجابة المفتاح الحالي خلال 12 ثانية أو فشله، ينتقل النظام تلقائيًا للمفتاح التالي بالترتيب أدناه</div></div>
+            <div><h3>مفتاح احتياطي (للضرورة القصوى فقط)</h3><div class="sub">يُستخدم فقط إذا فشل المفتاح الأساسي تمامًا. يُفضّل الاكتفاء بمفتاح واحد هنا لتفادي أي تعقيد إضافي.</div></div>
           </div>
 
           <div class="form-grid" style="margin-bottom:14px;">
             <div class="field">
               <label>اسم وصفي (للتمييز فقط)</label>
-              <input type="text" id="pool-label" placeholder="مثال: احتياط Gemini رقم 2">
-            </div>
-            <div class="field">
-              <label>نوع الذكاء الاصطناعي</label>
-              <select id="pool-provider">
-                <option value="gemini">Gemini (AI Studio)</option>
-                <option value="openrouter">OpenRouter</option>
-              </select>
+              <input type="text" id="pool-label" placeholder="مثال: احتياط للضرورة">
             </div>
             <div class="field">
               <label>الموديل</label>
-              <input type="text" id="pool-model" placeholder="gemini-2.5-flash أو openai/gpt-4o-mini" style="font-family:var(--font-mono)">
+              <input type="text" id="pool-model" placeholder="gemini-3.6-flash" style="font-family:var(--font-mono)">
             </div>
             <div class="field">
-              <label>مفتاح API</label>
+              <label>مفتاح Gemini API</label>
               <input type="text" id="pool-api-key" placeholder="المفتاح..." style="font-family:var(--font-mono)">
             </div>
-            <div class="field" id="pool-baseurl-field">
-              <label>رابط Base URL (فقط لـ OpenRouter)</label>
-              <input type="text" id="pool-base-url" placeholder="https://openrouter.ai/api/v1" style="font-family:var(--font-mono)">
-            </div>
-            <div class="field">
-              <label>ترتيب المحاولة (الأصغر يُجرَّب أولًا)</label>
-              <input type="number" id="pool-priority" placeholder="1" min="0" step="1">
-            </div>
-            <div class="field">
-              <label>الحد الأقصى بالدقيقة (RPM) — اختياري</label>
-              <input type="number" id="pool-max-rpm" placeholder="افتراضي: 8 لـ Gemini، 20 لـ OpenRouter" min="1" step="1">
-            </div>
           </div>
-          <div style="margin-bottom:18px;"><button class="btn btn-primary btn-sm" id="add-pool-key">+ إضافة مفتاح احتياطي</button></div>
+          <div style="margin-bottom:18px;"><button class="btn btn-primary btn-sm" id="add-pool-key">+ إضافة كمفتاح احتياطي</button></div>
 
           <div class="table-wrap">
             <table>
-              <thead><tr><th>الترتيب</th><th>الاسم</th><th>النوع</th><th>الموديل</th><th>RPM</th><th>الحالة</th><th>إجراء</th></tr></thead>
+              <thead><tr><th>الاسم</th><th>الموديل</th><th>الحالة</th><th>إجراء</th></tr></thead>
               <tbody id="ai-pool-tbody"></tbody>
             </table>
           </div>
