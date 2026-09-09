@@ -1188,7 +1188,7 @@ function startMetaOAuth(channel) {
   const storeId = state.session.data.id;
   setChannelCardStatus(channel, "pending", "جارٍ فتح نافذة الربط...");
 
-  MetaAPI.getOAuthUrl(storeId).then(({ url }) => {
+  MetaAPI.getOAuthUrl(storeId, channel).then(({ url }) => {
     const popup = window.open(url, "meta_oauth", "width=600,height=720");
     if (!popup) {
       toast("يرجى السماح للنوافذ المنبثقة (Popups) بهذا الموقع للمتابعة", "bad");
@@ -1207,6 +1207,12 @@ function startMetaOAuth(channel) {
         clearInterval(timer);
         toast("تم ربط الحساب بنجاح", "ok");
         refreshMetaStatus();
+      } else if (event.data.type === "meta_oauth_needs_selection") {
+        // أكثر من صفحة متاحة على الحساب: نعرض قائمة ليختار صاحب المتجر
+        // صفحته بدل ربط أول صفحة تلقائيًا
+        window.removeEventListener("message", handler);
+        clearInterval(timer);
+        openPageSelectionModal(channel, event.data.selectionId, event.data.pages);
       } else if (event.data.type === "meta_oauth_error") {
         window.removeEventListener("message", handler);
         clearInterval(timer);
@@ -1220,6 +1226,43 @@ function startMetaOAuth(channel) {
     toast("تعذر بدء عملية الربط عبر Meta. تحقق من إعدادات السيرفر", "bad");
     setChannelCardStatus(channel, "disconnected", "غير متصل");
   });
+}
+
+// يعرض قائمة صفحات فيسبوك المتاحة على الحساب ليختار صاحب المتجر الصفحة
+// التي يريد ربطها بالقناة (ماسنجر أو انستغرام) بدل الاختيار التلقائي
+function openPageSelectionModal(channel, selectionId, pages) {
+  setChannelCardStatus(channel, "pending", "يرجى اختيار الصفحة...");
+
+  const modal = $("#modal-meta-page-select");
+  const list = $("#meta-page-select-list");
+  list.innerHTML = "";
+
+  pages.forEach(page => {
+    const item = document.createElement("button");
+    item.type = "button";
+    item.className = "btn btn-outline";
+    item.style.width = "100%";
+    item.style.marginBottom = "8px";
+    item.style.textAlign = "right";
+    item.textContent = page.name;
+    item.addEventListener("click", async () => {
+      modal.classList.remove("show");
+      const storeId = state.session.data.id;
+      setChannelCardStatus(channel, "pending", "جارٍ إتمام الربط...");
+      try {
+        await MetaAPI.selectPage(storeId, selectionId, page.id);
+        toast("تم ربط الحساب بنجاح", "ok");
+        refreshMetaStatus();
+      } catch (err) {
+        console.error(err);
+        toast(err.message || "تعذر إتمام الربط بالصفحة المختارة", "bad");
+        setChannelCardStatus(channel, "disconnected", "غير متصل");
+      }
+    });
+    list.appendChild(item);
+  });
+
+  modal.classList.add("show");
 }
 
 $("#btn-messenger-connect").addEventListener("click", () => startMetaOAuth("messenger"));
