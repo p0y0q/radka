@@ -98,9 +98,20 @@ const MetaAPI = {
     };
   },
 
-  // يرجع رابط OAuth جاهز لفتحه بنافذة popup
+  // يرجع رابط OAuth جاهز لفتحه بنافذة popup (ماسنجر — عبر فيسبوك)
   async getOAuthUrl(storeId) {
     const res = await fetch(`${LINK_SERVER.baseUrl}/api/stores/${storeId}/meta/oauth-url`, {
+      method: "POST",
+      headers: this.headers(),
+    });
+    if (!res.ok) throw new Error(await res.text());
+    return res.json(); // { url }
+  },
+
+  // يرجع رابط OAuth جاهز لفتحه بنافذة popup (انستغرام — تسجيل دخول مباشر عبر instagram.com،
+  // بدون أي مرور بفيسبوك أو اختيار صفحة)
+  async getInstagramOAuthUrl(storeId) {
+    const res = await fetch(`${LINK_SERVER.baseUrl}/api/stores/${storeId}/instagram/oauth-url`, {
       method: "POST",
       headers: this.headers(),
     });
