@@ -214,12 +214,16 @@
               <label>ترتيب المحاولة (الأصغر يُجرَّب أولًا)</label>
               <input type="number" id="pool-priority" placeholder="1" min="0" step="1">
             </div>
+            <div class="field">
+              <label>الحد الأقصى بالدقيقة (RPM) — اختياري</label>
+              <input type="number" id="pool-max-rpm" placeholder="افتراضي: 8 لـ Gemini، 20 لـ OpenRouter" min="1" step="1">
+            </div>
           </div>
           <div style="margin-bottom:18px;"><button class="btn btn-primary btn-sm" id="add-pool-key">+ إضافة مفتاح احتياطي</button></div>
 
           <div class="table-wrap">
             <table>
-              <thead><tr><th>الترتيب</th><th>الاسم</th><th>النوع</th><th>الموديل</th><th>الحالة</th><th>إجراء</th></tr></thead>
+              <thead><tr><th>الترتيب</th><th>الاسم</th><th>النوع</th><th>الموديل</th><th>RPM</th><th>الحالة</th><th>إجراء</th></tr></thead>
               <tbody id="ai-pool-tbody"></tbody>
             </table>
           </div>
