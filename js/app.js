@@ -522,87 +522,29 @@ function openCustomersModal(storeId) {
   $("#modal-store-customers").classList.add("show");
 }
 
-// ---- إعدادات API ----
-let selectedProvider = "gemini";
-
-function setProvider(provider) {
-  selectedProvider = provider;
-  $("#provider-gemini-btn").classList.toggle("active", provider === "gemini");
-  $("#provider-openrouter-btn").classList.toggle("active", provider === "openrouter");
-  $("#provider-fields-gemini").classList.toggle("hidden", provider !== "gemini");
-  $("#provider-fields-openrouter").classList.toggle("hidden", provider !== "openrouter");
-}
-$("#provider-gemini-btn").addEventListener("click", () => setProvider("gemini"));
-$("#provider-openrouter-btn").addEventListener("click", () => setProvider("openrouter"));
+// ---- إعدادات API (Gemini فقط — مبسّطة بطلب المستخدم لتقليل التعقيد واحتمالية الأعطال) ----
 
 function renderApiSettingsTab() {
-  setProvider(state.apiSettings.global_ai_provider || "gemini");
   $("#gemini-api-key").value = state.apiSettings.global_gemini_api_key || "";
   $("#gemini-model").value = state.apiSettings.global_gemini_model || "gemini-3.6-flash";
-  $("#openrouter-base-url").value = state.apiSettings.global_openrouter_base_url || "https://openrouter.ai/api/v1";
-  $("#openrouter-api-key").value = state.apiSettings.global_openrouter_api_key || "";
-  $("#openrouter-model").value = state.apiSettings.global_openrouter_model || "";
-
-  $("#api-stores-tbody").innerHTML = state.stores.length ? state.stores.map(s => `
-    <tr>
-      <td>${escapeHtml(s.store_name)}</td>
-      <td style="font-family:var(--font-mono)">${escapeHtml(s.phone)}</td>
-      <td>${s.use_global_api ? '<span class="badge ok">المفتاح العام</span>' : '<span class="badge wait">مفتاح خاص</span>'}</td>
-      <td>
-        <input type="text" data-api-key-input="${s.id}" value="${escapeHtml(s.ai_api_key || '')}" placeholder="مفتاح خاص..." style="width:180px;padding:7px 10px;border-radius:7px;border:1.5px solid var(--line);font-family:var(--font-mono);font-size:12.5px;">
-      </td>
-      <td class="row-actions">
-        <button class="btn btn-outline btn-sm" data-toggle-api="${s.id}">${s.use_global_api ? 'تفعيل الخاص' : 'استخدام العام'}</button>
-        <button class="btn btn-primary btn-sm" data-save-api="${s.id}">حفظ</button>
-      </td>
-    </tr>
-  `).join("") : `<tr><td colspan="5" style="text-align:center;color:var(--ink-soft);padding:24px;">لا توجد متاجر بعد</td></tr>`;
-
-  $all("[data-toggle-api]").forEach(b => b.addEventListener("click", async () => {
-    const s = state.stores.find(x => x.id === b.dataset.toggleApi);
-    try {
-      await SB.update("stores", `id=eq.${s.id}`, { use_global_api: !s.use_global_api });
-      toast("تم تحديث وضع API للمتجر", "ok");
-      await loadAdminData(); renderApiSettingsTab();
-    } catch (err) { console.error(err); toast("تعذر التحديث", "bad"); }
-  }));
-
-  $all("[data-save-api]").forEach(b => b.addEventListener("click", async () => {
-    const input = $(`[data-api-key-input="${b.dataset.saveApi}"]`);
-    try {
-      await SB.update("stores", `id=eq.${b.dataset.saveApi}`, { ai_api_key: input.value.trim() });
-      toast("تم حفظ مفتاح المتجر", "ok");
-      await loadAdminData(); renderApiSettingsTab();
-    } catch (err) { console.error(err); toast("تعذر الحفظ", "bad"); }
-  }));
-
   renderAiPoolTable();
 }
 
 // ---------------------------------------------------------
-// مفاتيح الذكاء الاصطناعي الاحتياطية (Failover Pool) — لوحة الأدمن فقط
+// مفتاح احتياطي واحد فقط (للضرورة القصوى) — Gemini حصرًا، لا OpenRouter ولا تعقيد إضافي
 // ---------------------------------------------------------
-function togglePoolBaseUrlField() {
-  $("#pool-baseurl-field").style.display = $("#pool-provider").value === "openrouter" ? "" : "none";
-}
-$("#pool-provider").addEventListener("change", togglePoolBaseUrlField);
-togglePoolBaseUrlField();
-
 function renderAiPoolTable() {
   $("#ai-pool-tbody").innerHTML = state.aiPool.length ? state.aiPool.map(p => `
     <tr>
-      <td>${p.priority}</td>
       <td>${escapeHtml(p.label || '—')}</td>
-      <td>${p.provider === 'openrouter' ? 'OpenRouter' : 'Gemini'}</td>
       <td style="font-family:var(--font-mono);font-size:12.5px;">${escapeHtml(p.model || '—')}</td>
-      <td>${p.max_rpm || 'افتراضي'}</td>
       <td>${p.enabled ? '<span class="badge ok">مفعّل</span>' : '<span class="badge wait">معطّل</span>'}</td>
       <td class="row-actions">
         <button class="btn btn-outline btn-sm" data-toggle-pool="${p.id}">${p.enabled ? 'تعطيل' : 'تفعيل'}</button>
         <button class="btn btn-bad btn-sm" data-delete-pool="${p.id}">حذف</button>
       </td>
     </tr>
-  `).join("") : `<tr><td colspan="7" style="text-align:center;color:var(--ink-soft);padding:24px;">لا توجد مفاتيح احتياطية بعد</td></tr>`;
+  `).join("") : `<tr><td colspan="4" style="text-align:center;color:var(--ink-soft);padding:24px;">لا يوجد مفتاح احتياطي بعد</td></tr>`;
 
   $all("[data-toggle-pool]").forEach(b => b.addEventListener("click", async () => {
     const p = state.aiPool.find(x => x.id === b.dataset.togglePool);
@@ -627,21 +569,21 @@ $("#add-pool-key").addEventListener("click", async () => {
   const apiKey = $("#pool-api-key").value.trim();
   if (!model || !apiKey) { toast("الرجاء إدخال الموديل والمفتاح", "bad"); return; }
 
-  const payload = {
-    label: $("#pool-label").value.trim() || null,
-    provider: $("#pool-provider").value,
-    model,
-    api_key: apiKey,
-    base_url: $("#pool-provider").value === "openrouter" ? ($("#pool-base-url").value.trim() || "https://openrouter.ai/api/v1") : null,
-    priority: $("#pool-priority").value ? Number($("#pool-priority").value) : 0,
-    max_rpm: $("#pool-max-rpm").value ? Number($("#pool-max-rpm").value) : null,
-    enabled: true,
-  };
-
+  // نكتفي بمفتاح احتياطي واحد فقط لتقليل التعقيد — إذا كان يوجد مفتاح مسبقًا نستبدله بدل الإضافة عليه
   try {
-    await SB.insert("ai_provider_pool", payload);
-    toast("تمت إضافة المفتاح الاحتياطي", "ok");
-    ["pool-label", "pool-model", "pool-api-key", "pool-base-url", "pool-priority", "pool-max-rpm"].forEach(id => $(`#${id}`).value = "");
+    if (state.aiPool.length > 0) {
+      await SB.remove("ai_provider_pool", `id=eq.${state.aiPool[0].id}`);
+    }
+    await SB.insert("ai_provider_pool", {
+      label: $("#pool-label").value.trim() || "احتياط",
+      provider: "gemini",
+      model,
+      api_key: apiKey,
+      priority: 0,
+      enabled: true,
+    });
+    toast("تم حفظ المفتاح الاحتياطي", "ok");
+    ["pool-label", "pool-model", "pool-api-key"].forEach(id => $(`#${id}`).value = "");
     await loadAdminData(); renderApiSettingsTab();
   } catch (err) { console.error(err); toast("تعذر إضافة المفتاح", "bad"); }
 });
@@ -657,18 +599,10 @@ async function upsertApiSetting(key_name, key_value) {
 
 $("#save-global-api").addEventListener("click", async () => {
   try {
-    await upsertApiSetting("global_ai_provider", selectedProvider);
-
-    if (selectedProvider === "gemini") {
-      await upsertApiSetting("global_gemini_api_key", $("#gemini-api-key").value.trim());
-      await upsertApiSetting("global_gemini_model", $("#gemini-model").value.trim() || "gemini-3.6-flash");
-    } else {
-      await upsertApiSetting("global_openrouter_base_url", $("#openrouter-base-url").value.trim() || "https://openrouter.ai/api/v1");
-      await upsertApiSetting("global_openrouter_api_key", $("#openrouter-api-key").value.trim());
-      await upsertApiSetting("global_openrouter_model", $("#openrouter-model").value.trim());
-    }
-
-    toast("تم حفظ المفتاح العام", "ok");
+    await upsertApiSetting("global_ai_provider", "gemini");
+    await upsertApiSetting("global_gemini_api_key", $("#gemini-api-key").value.trim());
+    await upsertApiSetting("global_gemini_model", $("#gemini-model").value.trim() || "gemini-3.6-flash");
+    toast("تم حفظ المفتاح الأساسي", "ok");
     await loadAdminData();
   } catch (err) { console.error(err); toast("تعذر حفظ المفتاح", "bad"); }
 });
