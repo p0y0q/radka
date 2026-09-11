@@ -128,6 +128,18 @@ const MetaAPI = {
     return res.json(); // { channels: [...] }
   },
 
+  // يُستدعى بعد أن يختار التاجر صفحته من قائمة الصفحات (تظهر فقط عندما يملك
+  // حسابه أكثر من صفحة فيسبوك عند ربط ماسنجر — انظر meta_oauth_pages بـ app.js)
+  async selectPage(storeId, selectionId, pageId) {
+    const res = await fetch(`${LINK_SERVER.baseUrl}/api/stores/${storeId}/meta/select-page`, {
+      method: "POST",
+      headers: this.headers(),
+      body: JSON.stringify({ selectionId, pageId }),
+    });
+    if (!res.ok) throw new Error(await res.text());
+    return res.json();
+  },
+
   async setAiEnabled(storeId, channel, enabled) {
     const res = await fetch(`${LINK_SERVER.baseUrl}/api/stores/${storeId}/meta/${channel}/ai-toggle`, {
       method: "POST",
