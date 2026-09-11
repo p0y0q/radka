@@ -1209,6 +1209,12 @@ function startMetaOAuth(channel) {
         clearInterval(timer);
         toast("تم ربط الحساب بنجاح", "ok");
         refreshMetaStatus();
+      } else if (event.data.type === "meta_oauth_pages") {
+        // التاجر يملك أكثر من صفحة فيسبوك: نعرض قائمة ليختار بدل ربط صفحة عشوائية
+        window.removeEventListener("message", handler);
+        clearInterval(timer);
+        setChannelCardStatus("messenger", "pending", "اختر الصفحة التي تريد ربطها...");
+        showPageSelectionModal(event.data.selectionId, event.data.pages || []);
       } else if (event.data.type === "meta_oauth_error") {
         window.removeEventListener("message", handler);
         clearInterval(timer);
@@ -1223,6 +1229,53 @@ function startMetaOAuth(channel) {
     setChannelCardStatus(channel, "disconnected", "غير متصل");
   });
 }
+
+// قائمة اختيار صفحة فيسبوك (خاصة بماسنجر فقط — لا وجود لهذا المفهوم بتدفق
+// انستغرام المباشر) تظهر فقط عندما يملك حساب التاجر أكثر من صفحة
+function showPageSelectionModal(selectionId, pages) {
+  const list = $("#page-select-list");
+  list.innerHTML = pages.length
+    ? ""
+    : `<p style="color:var(--ink-soft);font-size:13px;">لم يتم العثور على أي صفحة.</p>`;
+
+  pages.forEach(p => {
+    const btn = document.createElement("button");
+    btn.type = "button";
+    btn.className = "page-pick-row";
+    btn.innerHTML = `
+      ${p.picture
+        ? `<img src="${escapeHtml(p.picture)}" alt="">`
+        : `<span class="ph-avatar">${escapeHtml((p.name || "؟").trim().charAt(0) || "؟")}</span>`}
+      <span class="info">
+        <b>${escapeHtml(p.name || "بدون اسم")}</b>
+        ${p.category ? `<span>${escapeHtml(p.category)}</span>` : ""}
+      </span>
+    `;
+    btn.addEventListener("click", async () => {
+      $all("button", list).forEach(b => b.disabled = true);
+      try {
+        const storeId = state.session.data.id;
+        await MetaAPI.selectPage(storeId, selectionId, p.id);
+        $("#modal-page-select").classList.remove("show");
+        toast("تم ربط الحساب بنجاح", "ok");
+        refreshMetaStatus();
+      } catch (err) {
+        console.error(err);
+        toast("تعذر ربط الصفحة المختارة، حاول مجددًا", "bad");
+        setChannelCardStatus("messenger", "disconnected", "غير متصل");
+        $all("button", list).forEach(b => b.disabled = false);
+      }
+    });
+    list.appendChild(btn);
+  });
+
+  $("#modal-page-select").classList.add("show");
+}
+
+$("#btn-page-select-close").addEventListener("click", () => {
+  $("#modal-page-select").classList.remove("show");
+  setChannelCardStatus("messenger", "disconnected", "غير متصل");
+});
 
 $("#btn-messenger-connect").addEventListener("click", () => startMetaOAuth("messenger"));
 $("#btn-instagram-connect").addEventListener("click", () => startMetaOAuth("instagram"));
