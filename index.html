@@ -569,6 +569,18 @@
   </div>
 </div>
 
+<!-- مودال اختيار صفحة فيسبوك عند ربط ماسنجر (تظهر فقط إذا كان لحساب التاجر أكثر من صفحة) -->
+<div class="modal-backdrop" id="modal-page-select">
+  <div class="modal" style="max-width:420px;">
+    <div class="modal-head">
+      <h3>اختر صفحة فيسبوك</h3>
+      <button class="modal-close" id="btn-page-select-close">✕</button>
+    </div>
+    <p style="color:var(--ink-soft);font-size:13px;margin:-8px 0 14px;">حسابك مسؤول عن أكثر من صفحة على فيسبوك، اختر الصفحة التي تريد ربطها بمتجرك:</p>
+    <div id="page-select-list" style="display:flex;flex-direction:column;gap:8px;max-height:360px;overflow-y:auto;"></div>
+  </div>
+</div>
+
 <!-- مودال إضافة/تعديل متجر -->
 <div class="modal-backdrop" id="modal-store">
   <div class="modal">
