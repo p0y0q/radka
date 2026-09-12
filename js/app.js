@@ -228,6 +228,7 @@ async function enterAdmin() {
   renderApiSettingsTab();
   renderAnnouncementsTab();
   renderComplaintsTab();
+  refreshAdminComplaintsBadge();
 
   if (state.adminWaPollTimer) clearInterval(state.adminWaPollTimer);
   state.adminWaPollTimer = setInterval(refreshAdminWaBadges, 8000);
@@ -261,13 +262,17 @@ async function loadAdminData() {
 }
 
 $all(".nav-item[data-tab^='a-']").forEach(btn => {
-  btn.addEventListener("click", () => switchTab("a", btn.dataset.tab, "admin-sidebar"));
+  btn.addEventListener("click", () => {
+    switchTab("a", btn.dataset.tab, "admin-sidebar");
+    if (btn.dataset.tab === "a-complaints") markAdminComplaintsSeen();
+  });
 });
 $all("[data-goto]").forEach(btn => {
   btn.addEventListener("click", () => {
     const tab = btn.dataset.goto;
     switchTab("a", tab, "admin-sidebar");
     $all(`#admin-sidebar .nav-item`).forEach(b => b.classList.toggle("active", b.dataset.tab === tab));
+    if (tab === "a-complaints") markAdminComplaintsSeen();
   });
 });
 
@@ -805,8 +810,24 @@ function renderAnnouncementsTab() {
         <span style="font-family:var(--font-display);color:var(--ink);">${escapeHtml(a.message)}</span><br>
         <span>${fmtTime(a.created_at)}</span>
       </div>
+      <button class="btn btn-bad btn-sm" data-delete-announcement="${a.id}" style="flex-shrink:0;">حذف</button>
     </div>`;
   }).join("") : `<div class="empty-state"><p>لم يتم نشر أي إعلان بعد</p></div>`;
+
+  $all("[data-delete-announcement]").forEach(b => b.addEventListener("click", () => deleteAnnouncement(b.dataset.deleteAnnouncement)));
+}
+
+async function deleteAnnouncement(id) {
+  if (!confirm("هل تريد حذف هذا الإعلان نهائيًا؟")) return;
+  try {
+    await SB.remove("announcements", `id=eq.${id}`);
+    toast("تم حذف الإعلان", "ok");
+    await loadAdminData();
+    renderAnnouncementsTab();
+  } catch (err) {
+    console.error(err);
+    toast("تعذر حذف الإعلان", "bad");
+  }
 }
 
 $("#send-announcement").addEventListener("click", async () => {
@@ -841,9 +862,30 @@ function renderComplaintsTab() {
     try {
       await SB.update("complaints", `id=eq.${b.dataset.resolve}`, { status: "resolved" });
       toast("تم تحديث حالة الشكوى", "ok");
-      await loadAdminData(); renderComplaintsTab();
+      await loadAdminData(); renderComplaintsTab(); refreshAdminComplaintsBadge();
     } catch (err) { console.error(err); toast("تعذر التحديث", "bad"); }
   }));
+}
+
+// ---------------------------------------------------------
+// إشعار "شكوى جديدة" (نقطة حمراء) بلوحة الأدمن
+// ---------------------------------------------------------
+function adminComplaintsSeenKey() {
+  return `wb_admin_complaints_seen_${state.session?.data?.id || "default"}`;
+}
+
+function refreshAdminComplaintsBadge() {
+  const dot = $("#notif-dot-a-complaints");
+  const navBtn = $(`.nav-item[data-tab="a-complaints"]`);
+  if (!dot || !navBtn) return;
+  const lastSeen = localStorage.getItem(adminComplaintsSeenKey());
+  const hasNew = state.complaints.some(c => !lastSeen || new Date(c.created_at) > new Date(lastSeen));
+  navBtn.classList.toggle("has-notif", hasNew);
+}
+
+function markAdminComplaintsSeen() {
+  localStorage.setItem(adminComplaintsSeenKey(), new Date().toISOString());
+  refreshAdminComplaintsBadge();
 }
 
 // =========================================================
@@ -871,6 +913,7 @@ async function enterStore() {
   refreshMetaStatus();
   refreshChannelAvailability();
   startOrdersPolling();
+  refreshStoreAnnouncementsBadge();
 }
 
 // تحديث تلقائي لسجل الطلبات في لوحة صاحب المتجر، دون الحاجة لتحديث الصفحة يدويًا
@@ -890,6 +933,19 @@ async function refreshStoreOrders() {
     renderStoreOverview();
   } catch (err) {
     console.error(err); // فشل تحديث صامت حتى لا يزعج التاجر بإشعارات متكررة
+  }
+  // فحص دوري لأي إعلان جديد لإظهار النقطة الحمراء دون الحاجة لتحديث الصفحة
+  try {
+    const [targeted, general] = await Promise.all([
+      SB.select("announcements", `store_id=eq.${storeId}&select=*&order=created_at.desc`),
+      SB.select("announcements", "store_id=is.null&select=*&order=created_at.desc&limit=5"),
+    ]);
+    state.announcements = [...targeted, ...general].sort((a, b) => new Date(b.created_at) - new Date(a.created_at));
+    renderStoreAnnouncementBanner();
+    if (!$("#tab-s-announcements").classList.contains("hidden")) renderStoreAnnouncementsTab();
+    refreshStoreAnnouncementsBadge();
+  } catch (err) {
+    console.error(err);
   }
 }
 
@@ -921,6 +977,7 @@ $all(".nav-item[data-tab^='s-']").forEach(btn => {
     if (btn.dataset.tab === "s-whatsapp") { refreshWaStatus(); refreshMetaStatus(); refreshChannelAvailability(); }
     if (btn.dataset.tab === "s-ai") renderStoreAiSettingsTab();
     if (btn.dataset.tab === "s-products") renderProductsTab();
+    if (btn.dataset.tab === "s-announcements") { renderStoreAnnouncementsTab(); markStoreAnnouncementsSeen(); }
   });
 });
 
@@ -933,6 +990,48 @@ function renderStoreAnnouncementBanner() {
       <b style="display:block;margin-bottom:4px;">📣 ${escapeHtml(latest.title)}</b>
       <span style="font-size:13.5px;color:var(--ink-soft);">${escapeHtml(latest.message)}</span>
     </div>`;
+}
+
+// ---------------------------------------------------------
+// تبويب الإعلانات (لوحة التاجر) + إشعار "إعلان جديد" (نقطة حمراء)
+// ---------------------------------------------------------
+function renderStoreAnnouncementsTab() {
+  const host = $("#store-announcements-list");
+  if (!host) return;
+  const lastSeen = localStorage.getItem(storeAnnouncementsSeenKey());
+  host.innerHTML = state.announcements.length ? state.announcements.map(a => {
+    const isNew = !lastSeen || new Date(a.created_at) > new Date(lastSeen);
+    const scope = a.store_id ? "خاص بمتجرك" : "إعلان عام لكل المتاجر";
+    return `
+    <div class="mini-product" style="align-items:flex-start;${isNew ? 'border-color:var(--bad);' : ''}">
+      <div class="info">
+        <b>
+          ${isNew ? '<span style="display:inline-block;width:8px;height:8px;border-radius:50%;background:var(--bad);margin-inline-end:6px;"></span>' : ''}
+          ${escapeHtml(a.title)}
+          <span style="font-weight:400;color:var(--ink-soft);">— ${scope}</span>
+        </b>
+        <span style="font-family:var(--font-display);color:var(--ink);">${escapeHtml(a.message)}</span><br>
+        <span>${fmtTime(a.created_at)}</span>
+      </div>
+    </div>`;
+  }).join("") : `<div class="empty-state"><p>لا توجد إعلانات حتى الآن</p></div>`;
+}
+
+function storeAnnouncementsSeenKey() {
+  return `wb_ann_seen_${state.session?.data?.id || "default"}`;
+}
+
+function refreshStoreAnnouncementsBadge() {
+  const navBtn = $(`.nav-item[data-tab="s-announcements"]`);
+  if (!navBtn) return;
+  const lastSeen = localStorage.getItem(storeAnnouncementsSeenKey());
+  const hasNew = state.announcements.some(a => !lastSeen || new Date(a.created_at) > new Date(lastSeen));
+  navBtn.classList.toggle("has-notif", hasNew);
+}
+
+function markStoreAnnouncementsSeen() {
+  localStorage.setItem(storeAnnouncementsSeenKey(), new Date().toISOString());
+  refreshStoreAnnouncementsBadge();
 }
 
 function renderStoreOverview() {
@@ -1697,6 +1796,15 @@ async function refreshAdminWaBadges() {
     state.stores = stores;
     renderStoresGrid();
     renderAdminOverview();
+  } catch (err) {
+    console.error(err);
+  }
+  // فحص دوري لأي شكوى جديدة لإظهار النقطة الحمراء دون الحاجة لتحديث الصفحة
+  try {
+    const complaints = await SB.select("complaints", "select=*&order=created_at.desc");
+    state.complaints = complaints;
+    if (!$("#tab-a-complaints").classList.contains("hidden")) renderComplaintsTab();
+    refreshAdminComplaintsBadge();
   } catch (err) {
     console.error(err);
   }
