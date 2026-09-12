@@ -72,6 +72,7 @@
 
       <button class="nav-item active" data-tab="a-overview"><span class="ic">◆</span> نظرة عامة</button>
       <button class="nav-item" data-tab="a-stores"><span class="ic">▤</span> المتاجر</button>
+      <button class="nav-item" data-tab="a-channels"><span class="ic">⛭</span> القنوات</button>
       <button class="nav-item" data-tab="a-api"><span class="ic">◈</span> إعدادات الذكاء الاصطناعي</button>
       <button class="nav-item" data-tab="a-announcements"><span class="ic">◉</span> الإعلانات</button>
       <button class="nav-item" data-tab="a-complaints"><span class="ic">✉</span> الشكاوى</button>
@@ -119,6 +120,19 @@
             <input type="text" id="store-search" placeholder="بحث بالاسم أو رقم الهاتف..." style="padding:9px 13px;border-radius:8px;border:1.5px solid var(--line);font-size:13px;min-width:220px;">
           </div>
           <div class="card-grid" id="stores-grid"></div>
+        </div>
+      </section>
+
+      <!-- القنوات -->
+      <section class="tab-panel hidden" id="tab-a-channels">
+        <div class="topbar">
+          <div>
+            <h2>إدارة القنوات</h2>
+            <div class="sub">تحكّم بإظهار/إخفاء أو تفعيل/إغلاق أي قناة — عامًا لكل المتاجر، أو استثناء لمتاجر محددة</div>
+          </div>
+        </div>
+        <div class="panel">
+          <div id="admin-channels-list"></div>
         </div>
       </section>
 
@@ -361,7 +375,7 @@
 
         <div class="channel-cards">
           <!-- بطاقة واتساب -->
-          <div class="channel-card wa">
+          <div class="channel-card wa" id="channel-card-wa">
             <div class="channel-icon">◉</div>
             <div class="channel-name">واتساب</div>
             <div class="channel-status-row disconnected" id="wa-status-row">
@@ -373,7 +387,7 @@
           </div>
 
           <!-- بطاقة ماسنجر -->
-          <div class="channel-card messenger">
+          <div class="channel-card messenger" id="channel-card-messenger">
             <div class="channel-icon">✉</div>
             <div class="channel-name">ماسنجر</div>
             <div class="channel-status-row disconnected" id="messenger-status-row">
@@ -393,7 +407,7 @@
           </div>
 
           <!-- بطاقة انستغرام -->
-          <div class="channel-card instagram">
+          <div class="channel-card instagram" id="channel-card-instagram">
             <div class="channel-icon">◈</div>
             <div class="channel-name">انستغرام</div>
             <div class="channel-status-row disconnected" id="instagram-status-row">
@@ -414,7 +428,7 @@
           </div>
 
           <!-- بطاقة تيليجرام -->
-          <div class="channel-card telegram">
+          <div class="channel-card telegram" id="channel-card-telegram">
             <div class="channel-icon">✈</div>
             <div class="channel-name">تيليجرام</div>
             <div class="channel-status-row disconnected" id="telegram-status-row">
@@ -435,7 +449,7 @@
           </div>
 
           <!-- بطاقة تيك توك -->
-          <div class="channel-card tiktok">
+          <div class="channel-card tiktok" id="channel-card-tiktok">
             <div class="channel-icon">♪</div>
             <div class="channel-name">تيك توك</div>
             <div class="channel-status-row disconnected" id="tiktok-status-row">
@@ -640,6 +654,45 @@
       <input type="text" id="f-telegram-bot-token" placeholder="مثال: 123456:ABC-defGhIJ..." dir="ltr">
     </div>
     <button class="btn btn-primary btn-sm" id="btn-telegram-connect-submit" style="width:100%;">ربط البوت</button>
+  </div>
+</div>
+
+<!-- مودال استثناءات قناة لمتاجر محددة (لوحة الأدمن) -->
+<div class="modal-backdrop" id="modal-channel-override">
+  <div class="modal" style="max-width:480px;">
+    <div class="modal-head">
+      <h3>استثناءات قناة <span id="channel-override-title"></span></h3>
+      <button class="modal-close" data-close="modal-channel-override">✕</button>
+    </div>
+    <p style="color:var(--ink-soft);font-size:13px;margin:-8px 0 14px;">
+      اختر متجرًا لتخصيص إظهار أو حالة هذه القناة له فقط، بغضّ النظر عن الإعداد العام أعلاه.
+    </p>
+    <div class="form-grid">
+      <div class="field">
+        <label>المتجر</label>
+        <select id="ov-store-select"></select>
+      </div>
+      <div class="field">
+        <label>الإظهار لهذا المتجر</label>
+        <select id="ov-visibility-select">
+          <option value="">يتبع الإعداد العام</option>
+          <option value="visible">إظهار دائمًا</option>
+          <option value="hidden">إخفاء دائمًا</option>
+        </select>
+      </div>
+      <div class="field" style="grid-column:1/-1;">
+        <label>حالة الربط لهذا المتجر</label>
+        <select id="ov-status-select">
+          <option value="">يتبع الإعداد العام</option>
+          <option value="enabled">مفتوحة دائمًا</option>
+          <option value="disabled">مغلقة دائمًا</option>
+        </select>
+      </div>
+    </div>
+    <button class="btn btn-primary btn-sm" id="btn-save-override" style="width:100%;margin-bottom:16px;">حفظ الاستثناء</button>
+
+    <div class="panel-head" style="padding:0;margin-bottom:8px;"><h3 style="font-size:14px;">استثناءات حالية</h3></div>
+    <div id="channel-override-list"></div>
   </div>
 </div>
 
