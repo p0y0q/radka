@@ -112,9 +112,6 @@ function validatePhone(phone) {
 // ---------------------------------------------------------
 let selectedRole = "store";
 
-$("#role-store-btn").addEventListener("click", () => setRole("store"));
-$("#role-admin-btn").addEventListener("click", () => setRole("admin"));
-
 function setRole(role) {
   selectedRole = role;
   $("#role-store-btn").classList.toggle("active", role === "store");
@@ -134,53 +131,118 @@ $("#login-phone").addEventListener("input", () => {
   $("#phone-error").classList.remove("show");
 });
 
-$("#login-form").addEventListener("submit", async (e) => {
+// =========================================================
+// معالج تسجيل الدخول الذكي (البحث في المتاجر ثم المشرفين)
+// =========================================================
+$("#login-form")?.addEventListener("submit", async (e) => {
   e.preventDefault();
-  hideLoginAlert();
+  
+  const phoneEl = $("#login-phone");
+  const passEl = $("#login-password");
+  const errEl = $("#phone-error");
+  const alertEl = $("#login-alert");
+  const btnSubmit = $("#login-submit");
 
-  const phone = $("#login-phone").value.trim();
-  const password = $("#login-password").value;
+  const phone = phoneEl.value.trim();
+  const password = passEl.value.trim();
 
-  const v = validatePhone(phone);
-  if (!v.valid) {
-    $("#login-phone").classList.add("err");
-    $("#phone-error").textContent = v.msg;
-    $("#phone-error").classList.add("show");
+  // إخفاء التنبيهات والأخطاء السابقة
+  alertEl.style.display = "none";
+  alertEl.textContent = "";
+
+  // 1. التحقق من صيغة رقم الهاتف (11 رقم وبدايته 07)
+  const phoneRegex = /^07\d{9}$/;
+  if (!phoneRegex.test(phone)) {
+    errEl.style.display = "block";
+    phoneEl.focus();
+    return;
+  } else {
+    errEl.style.display = "none";
+  }
+
+  // 2. التحقق من كتابة كلمة المرور
+  if (!password) {
+    alertEl.textContent = "يرجى إدخال كلمة المرور.";
+    alertEl.style.display = "block";
+    passEl.focus();
     return;
   }
 
-  const btn = $("#login-submit");
-  btn.disabled = true;
-  btn.textContent = "جارٍ التحقق...";
+  // تعطيل زر الدخول أثناء التحقق
+  btnSubmit.disabled = true;
+  btnSubmit.textContent = "جارٍ التحقق...";
 
   try {
-    if (selectedRole === "admin") {
-      const rows = await SB.select("admins", `phone=eq.${encodeURIComponent(phone)}&password=eq.${encodeURIComponent(password)}&select=*`);
-      if (rows.length === 0) {
-        showLoginAlert("رقم الهاتف أو كلمة المرور غير صحيحة.");
-      } else {
-        state.session = { role: "admin", data: rows[0] };
-        localStorage.setItem("wb_session", JSON.stringify(state.session));
-        await enterAdmin();
+    // --- Step 1: البحث في جدول أصحاب المتاجر (stores) أولاً ---
+    const stores = await SB.select("stores", `phone=eq.${encodeURIComponent(phone)}`);
+    
+    if (stores && stores.length > 0) {
+      const store = stores[0];
+      
+      // إذا وجد الرقم لكن كلمة المرور خاطئة
+      if (store.password !== password) {
+        alertEl.textContent = "كلمة المرور غير صحيحة.";
+        alertEl.style.display = "block";
+        btnSubmit.disabled = false;
+        btnSubmit.textContent = "دخول";
+        return;
       }
-    } else {
-      const rows = await SB.select("stores", `phone=eq.${encodeURIComponent(phone)}&password=eq.${encodeURIComponent(password)}&select=*`);
-      if (rows.length === 0) {
-        showLoginAlert("رقم الهاتف أو كلمة المرور غير صحيحة.");
-      } else if (rows[0].status === "suspended") {
-        showLoginAlert("هذا المتجر موقوف حاليًا. يرجى التواصل مع المشرف.");
-      } else {
-        state.session = { role: "store", data: rows[0] };
-        localStorage.setItem("wb_session", JSON.stringify(state.session));
-        await enterStore();
+
+      // إذا كان المتجر معطلاً
+      if (store.status === "suspended") {
+        alertEl.textContent = "هذا الحساب معطل حالياً. يرجى مراجعة المشرف العام.";
+        alertEl.style.display = "block";
+        btnSubmit.disabled = false;
+        btnSubmit.textContent = "دخول";
+        return;
       }
+
+      // نجاح الدخول كصاحب متجر
+      state.currentUser = { ...store, role: "store" };
+      sessionStorage.setItem("user", JSON.stringify(state.currentUser));
+      
+      await loadStoreData();
+      showScreen("store");
+      toast("أهلاً بك! تم تسجيل الدخول بنجاح", "ok");
+      return;
     }
+
+    // --- Step 2: إذا لم يوجد في المتاجر، يبحث في جدول المشرفين (admins) ---
+    const admins = await SB.select("admins", `phone=eq.${encodeURIComponent(phone)}`);
+
+    if (admins && admins.length > 0) {
+      const admin = admins[0];
+
+      // إذا وجد الرقم لكن كلمة المرور خاطئة
+      if (admin.password !== password) {
+        alertEl.textContent = "كلمة المرور غير صحيحة.";
+        alertEl.style.display = "block";
+        btnSubmit.disabled = false;
+        btnSubmit.textContent = "دخول";
+        return;
+      }
+
+      // نجاح الدخول كمشرف عام
+      state.currentUser = { ...admin, role: "admin" };
+      sessionStorage.setItem("user", JSON.stringify(state.currentUser));
+
+      await loadAdminData();
+      showScreen("admin");
+      toast("أهلاً بك أيها المشرف العام", "ok");
+      return;
+    }
+
+    // --- Step 3: إذا لم يوجد الرقم في الجدولين ---
+    alertEl.textContent = "رقم الهاتف غير مسجل في النظام.";
+    alertEl.style.display = "block";
+
   } catch (err) {
     console.error(err);
-    showLoginAlert("تعذر الاتصال بقاعدة البيانات. تحقق من إعدادات Supabase في js/config.js");
+    alertEl.textContent = `حدث خطأ أثناء تسجيل الدخول: ${readableSupabaseError(err)}`;
+    alertEl.style.display = "block";
   } finally {
-    btn.disabled = false;
-    btn.textContent = "دخول";
+    btnSubmit.disabled = false;
+    btnSubmit.textContent = "دخول";
   }
 });
 
