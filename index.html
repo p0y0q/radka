@@ -70,7 +70,7 @@
       <button class="nav-item" data-tab="a-channels"><span class="ic">⛭</span> القنوات</button>
       <button class="nav-item" data-tab="a-api"><span class="ic">◈</span> إعدادات الذكاء الاصطناعي</button>
       <button class="nav-item" data-tab="a-announcements"><span class="ic">◉</span> الإعلانات</button>
-      <button class="nav-item" data-tab="a-complaints"><span class="ic">✉</span> الشكاوى</button>
+      <button class="nav-item" data-tab="a-complaints"><span class="ic">✉</span> الشكاوى <span class="notif-dot" id="notif-dot-a-complaints"></span></button>
 
       <div class="sidebar-foot">
         <div class="who"><b id="admin-name-label">المشرف العام</b>مشرف النظام</div>
@@ -264,6 +264,7 @@
 
       <button class="nav-item active" data-tab="s-orders"><span class="ic">▤</span> الطلبات</button>
       <button class="nav-item" data-tab="s-products"><span class="ic">◫</span> المنتجات</button>
+      <button class="nav-item" data-tab="s-announcements"><span class="ic">📣</span> الإعلانات <span class="notif-dot" id="notif-dot-s-announcements"></span></button>
       <button class="nav-item" data-tab="s-whatsapp"><span class="ic">◉</span> ربط القنوات</button>
       <button class="nav-item" data-tab="s-ai"><span class="ic">✦</span> إعدادات الذكاء الاصطناعي</button>
       <button class="nav-item" data-tab="s-print"><span class="ic">⎙</span> الطباعة</button>
@@ -356,6 +357,19 @@
             <div class="glyph">◫</div>
             <p>لا توجد منتجات مطابقة</p>
           </div>
+        </div>
+      </section>
+
+      <!-- الإعلانات -->
+      <section class="tab-panel hidden" id="tab-s-announcements">
+        <div class="topbar">
+          <div>
+            <h2>الإعلانات</h2>
+            <div class="sub">كل الإعلانات المرسلة من الإدارة (العامة والخاصة بمتجرك)</div>
+          </div>
+        </div>
+        <div class="panel">
+          <div id="store-announcements-list"></div>
         </div>
       </section>
 
