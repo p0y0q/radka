@@ -119,6 +119,26 @@ const MetaAPI = {
     return res.json(); // { url }
   },
 
+  // يرجع رابط OAuth جاهز لفتحه بنافذة popup (تيك توك)
+  async getTikTokOAuthUrl(storeId) {
+    const res = await fetch(`${LINK_SERVER.baseUrl}/api/stores/${storeId}/tiktok/oauth-url`, {
+      headers: this.headers(),
+    });
+    if (!res.ok) throw new Error(await res.text());
+    return res.json(); // { url }
+  },
+
+  // ربط بوت تيليجرام مباشرة بتوكن (بدون أي نافذة OAuth — التاجر يلصق التوكن يدويًا)
+  async connectTelegram(storeId, botToken) {
+    const res = await fetch(`${LINK_SERVER.baseUrl}/api/stores/${storeId}/telegram/connect`, {
+      method: "POST",
+      headers: this.headers(),
+      body: JSON.stringify({ botToken }),
+    });
+    if (!res.ok) throw new Error(await res.text());
+    return res.json();
+  },
+
   // حالة قنوات ميتا (بيانات عامة فقط، بدون أي توكن)
   async status(storeId) {
     const res = await fetch(`${LINK_SERVER.baseUrl}/api/stores/${storeId}/meta/status`, {
