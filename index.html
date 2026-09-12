@@ -561,16 +561,45 @@
 
       <!-- إعدادات الحساب -->
       <section class="tab-panel hidden" id="tab-s-settings">
-        <div class="topbar">
-          <div>
-            <h2>إعدادات الحساب</h2>
-            <div class="sub">معلومات متجرك (البيانات الأساسية بيد المشرف)</div>
+
+        <!-- الواجهة الرئيسية لإعدادات الحساب -->
+        <div id="settings-home-view">
+          <div class="topbar">
+            <div>
+              <h2>إعدادات الحساب</h2>
+              <div class="sub">معلومات متجرك (البيانات الأساسية بيد المشرف)</div>
+            </div>
+          </div>
+          <div class="panel">
+            <div class="panel-head"><h3>معلومات المتجر</h3></div>
+            <div class="form-grid" id="store-info-view"></div>
+          </div>
+
+          <div class="panel">
+            <div class="panel-head"><h3>حول التطبيق</h3></div>
+            <div class="settings-links-list">
+              <a class="settings-link-item" href="about.html" target="_blank" rel="noopener">
+                <span>من نحن</span><span class="arrow">‹</span>
+              </a>
+              <a class="settings-link-item" href="privacy.html" target="_blank" rel="noopener">
+                <span>شروط الخصوصية</span><span class="arrow">‹</span>
+              </a>
+              <a class="settings-link-item" href="terms.html" target="_blank" rel="noopener">
+                <span>شروط الخدمة</span><span class="arrow">‹</span>
+              </a>
+              <a class="settings-link-item" href="faq.html" target="_blank" rel="noopener">
+                <span>الأسئلة الشائعة</span><span class="arrow">‹</span>
+              </a>
+            </div>
+          </div>
+
+          <div class="panel" style="border-color:var(--bad);">
+            <div class="panel-head"><h3 style="color:var(--bad);">منطقة الخطر</h3></div>
+            <p class="sub" style="margin-bottom:14px;">حذف حسابك نهائيًا من المنصة وكل بياناته المرتبطة به.</p>
+            <button class="btn btn-bad btn-sm" id="btn-open-delete-account">تقديم بطلب حذف الحساب</button>
           </div>
         </div>
-        <div class="panel">
-          <div class="panel-head"><h3>معلومات المتجر</h3></div>
-          <div class="form-grid" id="store-info-view"></div>
-        </div>
+
       </section>
     </main>
   </div>
@@ -813,6 +842,68 @@
     <div class="modal-foot">
       <button class="btn btn-outline btn-sm" data-close="modal-product">إلغاء</button>
       <button class="btn btn-primary btn-sm" id="save-product-btn">حفظ المنتج</button>
+    </div>
+  </div>
+</div>
+
+<!-- مودال تقديم بطلب حذف الحساب -->
+<div class="modal-backdrop" id="modal-delete-account">
+  <div class="modal" style="max-width:480px;">
+    <div class="modal-head">
+      <h3>تقديم بطلب حذف الحساب</h3>
+      <button class="modal-close" data-close="modal-delete-account">✕</button>
+    </div>
+
+    <!-- الخطوة 1: التحذير والموافقة على الشروط -->
+    <div id="delete-account-step-warning">
+      <div class="warn-box">
+        ⚠️ أنت على وشك تقديم طلب حذف حسابك نهائيًا. تأكد من قراءة النقاط التالية جيدًا:
+      </div>
+      <ul style="color:var(--ink-soft);font-size:13.5px;padding-inline-start:20px;margin:14px 0;line-height:1.9;">
+        <li>هل أنت متأكد من أنك تريد حذف الحساب؟ ستفقد جميع بياناتك ومنتجاتك وسجل طلباتك نهائيًا.</li>
+        <li>سيخضع طلبك لمراجعة فريق الإدارة قبل تنفيذه.</li>
+        <li>تستغرق عملية الحذف الفعلية من <b>يومين إلى ثلاثة أيام</b> من تاريخ تقديم الطلب.</li>
+        <li>هل أنت متأكد من مخاطر حذف الحساب نهائيًا؟ لا يمكن التراجع عن هذا الإجراء بعد تنفيذه.</li>
+      </ul>
+      <label style="display:flex;align-items:flex-start;gap:8px;font-size:13px;color:var(--ink-soft);cursor:pointer;margin-bottom:6px;">
+        <input type="checkbox" id="delete-account-agree-terms" style="margin-top:3px;">
+        <span>
+          أوافق على
+          <a href="terms.html" target="_blank" rel="noopener" style="color:var(--palm);font-weight:700;">شروط الخدمة</a>
+          بما في ذلك أن حذف الحساب أثناء وجود اشتراك سارٍ لا يُلزم الشركة باسترجاع أي مبالغ مدفوعة عن ذلك الاشتراك.
+        </span>
+      </label>
+      <div class="modal-foot">
+        <button class="btn btn-outline btn-sm" data-close="modal-delete-account">إلغاء</button>
+        <button class="btn btn-bad btn-sm" id="btn-delete-account-continue">متابعة</button>
+      </div>
+    </div>
+
+    <!-- الخطوة 2: كتابة سبب الحذف -->
+    <div id="delete-account-step-reason" class="hidden">
+      <p style="color:var(--ink-soft);font-size:13.5px;margin:-6px 0 14px;">
+        الرجاء كتابة سبب رغبتك في حذف الحساب، ليتم إرسال طلبك إلى فريق الإدارة:
+      </p>
+      <div class="field">
+        <label>سبب حذف الحساب</label>
+        <textarea id="delete-account-reason" rows="4" placeholder="اكتب السبب هنا..."></textarea>
+      </div>
+      <div class="modal-foot">
+        <button class="btn btn-outline btn-sm" id="btn-delete-account-back">رجوع</button>
+        <button class="btn btn-bad btn-sm" id="btn-delete-account-submit">تقديم الطلب</button>
+      </div>
+    </div>
+
+    <!-- الخطوة 3: تم الإرسال -->
+    <div id="delete-account-step-done" class="hidden">
+      <div class="empty-state" style="padding:20px 10px;">
+        <div class="glyph" style="color:var(--bad);">✔</div>
+        <p style="margin-bottom:4px;font-weight:700;">تم إرسال طلبك بنجاح</p>
+        <p style="color:var(--ink-soft);font-size:13.5px;">سيتم التواصل معك بعد مراجعة الطلب من قِبل الإدارة، خلال يومين إلى ثلاثة أيام.</p>
+      </div>
+      <div class="modal-foot">
+        <button class="btn btn-primary btn-sm" data-close="modal-delete-account">إغلاق</button>
+      </div>
     </div>
   </div>
 </div>
