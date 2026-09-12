@@ -682,6 +682,8 @@ async function enterStore() {
   setChannelCardStatus("wa", "disconnected", "غير متصل");
   setChannelCardStatus("messenger", "disconnected", "غير متصل");
   setChannelCardStatus("instagram", "disconnected", "غير متصل");
+  setChannelCardStatus("telegram", "disconnected", "غير متصل");
+  setChannelCardStatus("tiktok", "disconnected", "غير متصل");
   refreshWaStatus();
   refreshMetaStatus();
 }
@@ -1146,7 +1148,7 @@ $("#btn-wa-disconnect").addEventListener("click", async () => {
 // ربط ماسنجر / انستغرام عبر Meta OAuth (لوحة المتجر)
 // ---------------------------------------------------------
 
-const METACHANNEL_LABELS = { messenger: "ماسنجر", instagram: "انستغرام" };
+const METACHANNEL_LABELS = { messenger: "ماسنجر", instagram: "انستغرام", telegram: "تيليجرام", tiktok: "تيك توك" };
 
 async function refreshMetaStatus() {
   const storeId = state.session.data.id;
@@ -1155,7 +1157,7 @@ async function refreshMetaStatus() {
     const byChannel = {};
     (res.channels || []).forEach(c => { byChannel[c.channel] = c; });
 
-    ["messenger", "instagram"].forEach(channel => {
+    ["messenger", "instagram", "telegram", "tiktok"].forEach(channel => {
       const info = byChannel[channel];
       const connected = info && info.status === "connected";
 
@@ -1180,7 +1182,7 @@ async function refreshMetaStatus() {
   } catch (err) {
     console.error(err);
     // تعذر الوصول لسيرفر الربط: نعرض حالة غير متصل بدل تعليق الواجهة
-    ["messenger", "instagram"].forEach(channel => setChannelCardStatus(channel, "disconnected", "غير متصل"));
+    ["messenger", "instagram", "telegram", "tiktok"].forEach(channel => setChannelCardStatus(channel, "disconnected", "غير متصل"));
   }
 }
 
@@ -1188,7 +1190,10 @@ function startMetaOAuth(channel) {
   const storeId = state.session.data.id;
   setChannelCardStatus(channel, "pending", "جارٍ فتح نافذة الربط...");
 
-  const getUrl = channel === "instagram" ? MetaAPI.getInstagramOAuthUrl(storeId) : MetaAPI.getOAuthUrl(storeId);
+  const getUrl =
+    channel === "instagram" ? MetaAPI.getInstagramOAuthUrl(storeId) :
+    channel === "tiktok" ? MetaAPI.getTikTokOAuthUrl(storeId) :
+    MetaAPI.getOAuthUrl(storeId);
 
   getUrl.then(({ url }) => {
     const popup = window.open(url, "meta_oauth", "width=600,height=720");
@@ -1204,7 +1209,7 @@ function startMetaOAuth(channel) {
 
     function handler(event) {
       if (!event.data || typeof event.data !== "object") return;
-      if (event.data.type === "meta_oauth_success") {
+      if (event.data.type === "meta_oauth_success" || event.data.type === "tiktok_oauth_success") {
         window.removeEventListener("message", handler);
         clearInterval(timer);
         toast("تم ربط الحساب بنجاح", "ok");
@@ -1215,20 +1220,52 @@ function startMetaOAuth(channel) {
         clearInterval(timer);
         setChannelCardStatus("messenger", "pending", "اختر الصفحة التي تريد ربطها...");
         showPageSelectionModal(event.data.selectionId, event.data.pages || []);
-      } else if (event.data.type === "meta_oauth_error") {
+      } else if (event.data.type === "meta_oauth_error" || event.data.type === "tiktok_oauth_error") {
         window.removeEventListener("message", handler);
         clearInterval(timer);
-        toast(event.data.message || "تعذر إتمام الربط عبر Meta", "bad");
+        toast(event.data.message || "تعذر إتمام الربط", "bad");
         setChannelCardStatus(channel, "disconnected", "غير متصل");
       }
     }
     window.addEventListener("message", handler);
   }).catch(err => {
     console.error(err);
-    toast("تعذر بدء عملية الربط عبر Meta. تحقق من إعدادات السيرفر", "bad");
+    toast("تعذر بدء عملية الربط. تحقق من إعدادات السيرفر", "bad");
     setChannelCardStatus(channel, "disconnected", "غير متصل");
   });
 }
+
+// ربط بوت تيليجرام: لا يوجد OAuth هنا، فقط نفتح مودال لصق التوكن
+function startTelegramConnect() {
+  $("#f-telegram-bot-token").value = "";
+  $("#modal-telegram-connect").classList.add("show");
+}
+
+$("#btn-telegram-connect-submit").addEventListener("click", async () => {
+  const botToken = $("#f-telegram-bot-token").value.trim();
+  if (!botToken) {
+    toast("الصق توكن البوت أولًا", "bad");
+    return;
+  }
+  const btn = $("#btn-telegram-connect-submit");
+  btn.disabled = true;
+  setChannelCardStatus("telegram", "pending", "جارٍ التحقق من التوكن...");
+  try {
+    const storeId = state.session.data.id;
+    await MetaAPI.connectTelegram(storeId, botToken);
+    $("#modal-telegram-connect").classList.remove("show");
+    toast("تم ربط بوت تيليجرام بنجاح", "ok");
+    refreshMetaStatus();
+  } catch (err) {
+    console.error(err);
+    toast("تعذر ربط البوت — تأكد أن التوكن صحيح ومنسوخ بالكامل", "bad");
+    setChannelCardStatus("telegram", "disconnected", "غير متصل");
+  } finally {
+    btn.disabled = false;
+  }
+});
+
+
 
 // قائمة اختيار صفحة فيسبوك (خاصة بماسنجر فقط — لا وجود لهذا المفهوم بتدفق
 // انستغرام المباشر) تظهر فقط عندما يملك حساب التاجر أكثر من صفحة
@@ -1279,8 +1316,10 @@ $("#btn-page-select-close").addEventListener("click", () => {
 
 $("#btn-messenger-connect").addEventListener("click", () => startMetaOAuth("messenger"));
 $("#btn-instagram-connect").addEventListener("click", () => startMetaOAuth("instagram"));
+$("#btn-telegram-connect").addEventListener("click", () => startTelegramConnect());
+$("#btn-tiktok-connect").addEventListener("click", () => startMetaOAuth("tiktok"));
 
-["messenger", "instagram"].forEach(channel => {
+["messenger", "instagram", "telegram", "tiktok"].forEach(channel => {
   $(`#btn-${channel}-disconnect`).addEventListener("click", async () => {
     if (!confirm(`هل تريد فصل ربط ${METACHANNEL_LABELS[channel]}؟`)) return;
     const storeId = state.session.data.id;
