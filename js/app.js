@@ -14,6 +14,7 @@ const state = {
   ordersFilter: "all",
   waPollTimer: null,  // مؤقت فحص حالة ربط واتساب (لوحة المتجر)
   adminWaPollTimer: null, // مؤقت تحديث شارات الربط بلوحة الأدمن
+  ordersPollTimer: null,  // مؤقت تحديث سجل الطلبات تلقائيًا (لوحة المتجر)
   products: [],        // منتجات متجر التاجر الحالي (تبويب المنتجات)
   productsFilter: "all",
   productCategoryFilter: "",
@@ -177,6 +178,7 @@ function logout() {
   state.session = null;
   localStorage.removeItem("wb_session");
   stopWaPolling();
+  stopOrdersPolling();
   if (state.adminWaPollTimer) { clearInterval(state.adminWaPollTimer); state.adminWaPollTimer = null; }
   $("#login-form").reset();
   showScreen("screen-login");
@@ -868,6 +870,27 @@ async function enterStore() {
   refreshWaStatus();
   refreshMetaStatus();
   refreshChannelAvailability();
+  startOrdersPolling();
+}
+
+// تحديث تلقائي لسجل الطلبات في لوحة صاحب المتجر، دون الحاجة لتحديث الصفحة يدويًا
+function startOrdersPolling() {
+  if (state.ordersPollTimer) clearInterval(state.ordersPollTimer);
+  state.ordersPollTimer = setInterval(refreshStoreOrders, 8000);
+}
+function stopOrdersPolling() {
+  if (state.ordersPollTimer) { clearInterval(state.ordersPollTimer); state.ordersPollTimer = null; }
+}
+async function refreshStoreOrders() {
+  if (!state.session || state.session.role !== "store") return;
+  const storeId = state.session.data.id;
+  try {
+    const orders = await SB.select("orders", `store_id=eq.${storeId}&select=*&order=created_at.desc`);
+    state.orders = orders;
+    renderStoreOverview();
+  } catch (err) {
+    console.error(err); // فشل تحديث صامت حتى لا يزعج التاجر بإشعارات متكررة
+  }
 }
 
 async function loadStoreData() {
@@ -985,6 +1008,63 @@ function renderStoreInfo() {
     <div class="field" style="grid-column:1/-1;"><label>ملاحظة</label><input value="لتعديل هذه البيانات تواصل مع المشرف العام" disabled></div>
   `;
 }
+
+// ---------------------------------------------------------
+// تقديم بطلب حذف الحساب (لوحة التاجر)
+// ---------------------------------------------------------
+function resetDeleteAccountModal() {
+  $("#delete-account-step-warning").classList.remove("hidden");
+  $("#delete-account-step-reason").classList.add("hidden");
+  $("#delete-account-step-done").classList.add("hidden");
+  $("#delete-account-agree-terms").checked = false;
+  $("#delete-account-reason").value = "";
+}
+
+$("#btn-open-delete-account").addEventListener("click", () => {
+  resetDeleteAccountModal();
+  $("#modal-delete-account").classList.add("show");
+});
+
+$("#btn-delete-account-continue").addEventListener("click", () => {
+  if (!$("#delete-account-agree-terms").checked) {
+    toast("يجب الموافقة على الشروط أولًا للمتابعة", "bad");
+    return;
+  }
+  $("#delete-account-step-warning").classList.add("hidden");
+  $("#delete-account-step-reason").classList.remove("hidden");
+});
+
+$("#btn-delete-account-back").addEventListener("click", () => {
+  $("#delete-account-step-reason").classList.add("hidden");
+  $("#delete-account-step-warning").classList.remove("hidden");
+});
+
+$("#btn-delete-account-submit").addEventListener("click", async () => {
+  const reason = $("#delete-account-reason").value.trim();
+  if (!reason) { toast("الرجاء كتابة سبب حذف الحساب", "bad"); return; }
+
+  const btn = $("#btn-delete-account-submit");
+  btn.disabled = true;
+  btn.textContent = "جارٍ الإرسال...";
+  try {
+    await SB.insert("complaints", {
+      store_id: state.session.data.id,
+      store_name: state.session.data.store_name,
+      subject: reason,
+      message: "تقديم بطلب حذف الحساب",
+    });
+    $("#delete-account-step-reason").classList.add("hidden");
+    $("#delete-account-step-done").classList.remove("hidden");
+    await loadStoreData();
+    renderMyComplaints();
+  } catch (err) {
+    console.error(err);
+    toast("تعذر إرسال طلب حذف الحساب", "bad");
+  } finally {
+    btn.disabled = false;
+    btn.textContent = "تقديم الطلب";
+  }
+});
 
 // ---- شكوى المتجر ----
 $("#send-complaint").addEventListener("click", async () => {
