@@ -1,0 +1,164 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1" />
+<title>من نحن | Radka</title>
+<style>
+  :root {
+    --ink: #12241f;
+    --ink-soft: #3f564e;
+    --paper: #f6f4ee;
+    --paper-raised: #ffffff;
+    --line: #d9d3c4;
+    --palm: #1f5f4f;
+    --palm-deep: #123c32;
+    --palm-tint: #e4efe9;
+    --gold: #c98a3a;
+    --gold-tint: #f7ecd9;
+    --ok: #2f7a4f;
+    --font: -apple-system, BlinkMacSystemFont, "Segoe UI", Tahoma, Arial, sans-serif;
+    --font-mono: "Courier New", monospace;
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0;
+    background: var(--paper);
+    color: var(--ink);
+    font-family: var(--font);
+    line-height: 1.85;
+    font-size: 15.5px;
+  }
+  .topbar {
+    background: var(--palm-deep);
+    color: #eef4f1;
+    padding: 22px 20px;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+  }
+  .topbar-brand { display: flex; align-items: center; gap: 12px; }
+  .glyph {
+    width: 40px; height: 40px;
+    border-radius: 10px;
+    background: var(--gold);
+    color: #2a1c08;
+    display: flex; align-items: center; justify-content: center;
+    font-weight: 800; font-size: 16px;
+    flex-shrink: 0;
+  }
+  .topbar h1 { font-size: 17px; margin: 0; }
+  .topbar p { font-size: 12.5px; margin: 2px 0 0; opacity: .75; }
+  .back-btn {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    background: rgba(255,255,255,0.12);
+    color: #eef4f1;
+    border: 1px solid rgba(255,255,255,0.25);
+    padding: 8px 14px;
+    border-radius: 9px;
+    font-size: 13px;
+    font-weight: 700;
+    text-decoration: none;
+    cursor: pointer;
+    flex-shrink: 0;
+  }
+  .back-btn:hover { background: rgba(255,255,255,0.2); }
+  .wrap {
+    max-width: 760px;
+    margin: 0 auto;
+    padding: 28px 20px 60px;
+  }
+  .updated {
+    background: var(--gold-tint);
+    border: 1px solid var(--gold);
+    color: #6b4718;
+    padding: 10px 14px;
+    border-radius: 10px;
+    font-size: 13px;
+    margin-bottom: 28px;
+    display: inline-block;
+  }
+  .panel {
+    background: var(--paper-raised);
+    border: 1px solid var(--line);
+    border-radius: 14px;
+    padding: 22px 22px;
+    margin-bottom: 18px;
+  }
+  .panel h2 {
+    font-size: 16.5px;
+    color: var(--palm-deep);
+    margin: 0 0 10px;
+    display: flex; align-items: center; gap: 8px;
+  }
+  .panel h2 .n {
+    background: var(--palm-tint);
+    color: var(--palm);
+    width: 26px; height: 26px;
+    border-radius: 7px;
+    display: flex; align-items: center; justify-content: center;
+    font-size: 13px; font-weight: 800;
+    flex-shrink: 0;
+  }
+  .panel p, .panel li { color: var(--ink-soft); font-size: 14.5px; }
+  .panel ul { margin: 8px 0 0; padding-inline-start: 20px; }
+  .panel li { margin-bottom: 6px; }
+  a { color: var(--palm); }
+  .foot {
+    text-align: center;
+    color: var(--ink-soft);
+    font-size: 12.5px;
+    margin-top: 30px;
+  }
+</style>
+</head>
+<body>
+
+<div class="topbar">
+  <div class="topbar-brand">
+    <div class="glyph">وب</div>
+    <div>
+      <h1>Radka — لوحة متاجر واتساب</h1>
+      <p>من نحن</p>
+    </div>
+  </div>
+  <a href="javascript:history.back()" class="back-btn">→ رجوع</a>
+</div>
+
+<div class="wrap">
+  <span class="updated">آخر تحديث: 7 سبتمبر 2026</span>
+
+  <div class="panel">
+    <h2><span class="n">1</span> من نحن</h2>
+    <p>
+      <b>Radka</b> منصة عربية متكاملة تساعد أصحاب المتاجر الصغيرة والمتوسطة على إدارة طلبات
+      ومنتجات متاجرهم، والرد الآلي على عملائهم بالذكاء الاصطناعي عبر واتساب وماسنجر وانستغرام
+      وتيليجرام وتيك توك، من لوحة تحكم واحدة سهلة الاستخدام.
+    </p>
+  </div>
+
+  <div class="panel">
+    <h2><span class="n">2</span> رسالتنا</h2>
+    <p>
+      هدفنا تمكين التجّار من توفير وقتهم وجهدهم، عبر أتمتة الردود على استفسارات الزبائن، وتنظيم
+      سجل الطلبات والمنتجات والمخزون، ومتابعة كل ذلك من مكان واحد دون الحاجة لخبرة تقنية مسبقة.
+    </p>
+  </div>
+
+  <div class="panel">
+    <h2><span class="n">3</span> التزامنا</h2>
+    <ul>
+      <li>لوحة تحكم عربية بسيطة لا تتطلب خبرة تقنية.</li>
+      <li>ربط مباشر مع قنوات التواصل التي يستخدمها عملاؤك يوميًا.</li>
+      <li>حماية بيانات كل متجر وزبائنه، دون استخدامها إلا لتقديم الخدمة المتفق عليها.</li>
+    </ul>
+  </div>
+
+  <div class="foot">© 2026 Radka. جميع الحقوق محفوظة.</div>
+</div>
+
+</body>
+</html>

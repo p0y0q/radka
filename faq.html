@@ -1,0 +1,169 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1" />
+<title>الأسئلة الشائعة | Radka</title>
+<style>
+  :root {
+    --ink: #12241f;
+    --ink-soft: #3f564e;
+    --paper: #f6f4ee;
+    --paper-raised: #ffffff;
+    --line: #d9d3c4;
+    --palm: #1f5f4f;
+    --palm-deep: #123c32;
+    --palm-tint: #e4efe9;
+    --gold: #c98a3a;
+    --gold-tint: #f7ecd9;
+    --ok: #2f7a4f;
+    --font: -apple-system, BlinkMacSystemFont, "Segoe UI", Tahoma, Arial, sans-serif;
+    --font-mono: "Courier New", monospace;
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0;
+    background: var(--paper);
+    color: var(--ink);
+    font-family: var(--font);
+    line-height: 1.85;
+    font-size: 15.5px;
+  }
+  .topbar {
+    background: var(--palm-deep);
+    color: #eef4f1;
+    padding: 22px 20px;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+  }
+  .topbar-brand { display: flex; align-items: center; gap: 12px; }
+  .glyph {
+    width: 40px; height: 40px;
+    border-radius: 10px;
+    background: var(--gold);
+    color: #2a1c08;
+    display: flex; align-items: center; justify-content: center;
+    font-weight: 800; font-size: 16px;
+    flex-shrink: 0;
+  }
+  .topbar h1 { font-size: 17px; margin: 0; }
+  .topbar p { font-size: 12.5px; margin: 2px 0 0; opacity: .75; }
+  .back-btn {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    background: rgba(255,255,255,0.12);
+    color: #eef4f1;
+    border: 1px solid rgba(255,255,255,0.25);
+    padding: 8px 14px;
+    border-radius: 9px;
+    font-size: 13px;
+    font-weight: 700;
+    text-decoration: none;
+    cursor: pointer;
+    flex-shrink: 0;
+  }
+  .back-btn:hover { background: rgba(255,255,255,0.2); }
+  .wrap {
+    max-width: 760px;
+    margin: 0 auto;
+    padding: 28px 20px 60px;
+  }
+  .updated {
+    background: var(--gold-tint);
+    border: 1px solid var(--gold);
+    color: #6b4718;
+    padding: 10px 14px;
+    border-radius: 10px;
+    font-size: 13px;
+    margin-bottom: 28px;
+    display: inline-block;
+  }
+  .panel {
+    background: var(--paper-raised);
+    border: 1px solid var(--line);
+    border-radius: 14px;
+    padding: 18px 22px;
+    margin-bottom: 14px;
+  }
+  .panel h2 {
+    font-size: 15.5px;
+    color: var(--palm-deep);
+    margin: 0 0 8px;
+    display: flex; align-items: center; gap: 8px;
+  }
+  .panel h2 .n {
+    background: var(--palm-tint);
+    color: var(--palm);
+    width: 24px; height: 24px;
+    border-radius: 7px;
+    display: flex; align-items: center; justify-content: center;
+    font-size: 12.5px; font-weight: 800;
+    flex-shrink: 0;
+  }
+  .panel p { color: var(--ink-soft); font-size: 14.5px; margin: 0; }
+  a { color: var(--palm); }
+  .foot {
+    text-align: center;
+    color: var(--ink-soft);
+    font-size: 12.5px;
+    margin-top: 30px;
+  }
+</style>
+</head>
+<body>
+
+<div class="topbar">
+  <div class="topbar-brand">
+    <div class="glyph">وب</div>
+    <div>
+      <h1>Radka — لوحة متاجر واتساب</h1>
+      <p>الأسئلة الشائعة</p>
+    </div>
+  </div>
+  <a href="javascript:history.back()" class="back-btn">→ رجوع</a>
+</div>
+
+<div class="wrap">
+  <span class="updated">آخر تحديث: 7 سبتمبر 2026</span>
+
+  <div class="panel">
+    <h2><span class="n">1</span> كيف أربط متجري بواتساب؟</h2>
+    <p>من تبويب "ربط القنوات" اضغط "ربط واتساب"، ثم امسح رمز QR الظاهر من واتساب ← الأجهزة المرتبطة ← ربط جهاز.</p>
+  </div>
+
+  <div class="panel">
+    <h2><span class="n">2</span> هل يمكنني تعديل بيانات دخول متجري بنفسي؟</h2>
+    <p>البيانات الأساسية للمتجر (الاسم، رقم الدخول، كلمة المرور) بيد المشرف العام فقط. لتعديلها تواصل معه عبر تبويب "تقديم شكوى".</p>
+  </div>
+
+  <div class="panel">
+    <h2><span class="n">3</span> كيف يرد الذكاء الاصطناعي على الزبائن؟</h2>
+    <p>يرد البوت تلقائيًا بالاعتماد على منتجاتك المضافة في لوحة التحكم، واسم متجرك ووسيلة التواصل التي تحددها من "إعدادات الذكاء الاصطناعي".</p>
+  </div>
+
+  <div class="panel">
+    <h2><span class="n">4</span> كيف أعرف حالة طلب زبون؟</h2>
+    <p>من تبويب "الطلبات" يمكنك تصفية الطلبات حسب الحالة (بالانتظار، منجزة، ملغاة)، ويتم تحديث سجل الطلبات تلقائيًا دون الحاجة لتحديث الصفحة.</p>
+  </div>
+
+  <div class="panel">
+    <h2><span class="n">5</span> ماذا يحدث إذا طلبت حذف حسابي؟</h2>
+    <p>
+      يُرسل طلبك إلى الإدارة للمراجعة، وتستغرق عملية الحذف من يومين إلى ثلاثة أيام عمل. الحذف
+      نهائي ويشمل كل بيانات متجرك، ولا يحق لك استرجاع رسوم أي اشتراك سارٍ عند الحذف.
+    </p>
+  </div>
+
+  <div class="panel">
+    <h2><span class="n">6</span> لدي مشكلة تقنية، ماذا أفعل؟</h2>
+    <p>استخدم تبويب "تقديم شكوى" داخل لوحة تحكم متجرك لإرسال تفاصيل المشكلة مباشرة إلى المشرف العام.</p>
+  </div>
+
+  <div class="foot">© 2026 Radka. جميع الحقوق محفوظة.</div>
+</div>
+
+</body>
+</html>
