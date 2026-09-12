@@ -625,6 +625,18 @@ function getChannelGlobalRow(channel) {
   return state.channelGlobalSettings.find(r => r.channel === channel) || { visibility: "visible", status: "enabled" };
 }
 
+// أخطاء Supabase/PostgREST تصل كنص JSON خام برسالة err.message (مثال:
+// {"code":"42P01","message":"relation \"channel_global_settings\" does not exist"})
+// هذه الدالة تحاول استخراج الرسالة الحقيقية بدل عرض "تعذر..." عامة لا تشرح شيئًا
+function readableSupabaseError(err) {
+  try {
+    const parsed = JSON.parse(err.message);
+    return parsed.message || parsed.hint || parsed.details || err.message;
+  } catch (e) {
+    return err.message || "خطأ غير معروف";
+  }
+}
+
 function renderChannelsTab() {
   $("#admin-channels-list").innerHTML = ALL_CHANNELS.map(channel => {
     const g = getChannelGlobalRow(channel);
@@ -679,7 +691,7 @@ $("#admin-channels-list").addEventListener("change", async (e) => {
     toast("تم تحديث إعداد القناة", "ok");
   } catch (err) {
     console.error(err);
-    toast("تعذر تحديث إعداد القناة", "bad");
+    toast(`تعذر تحديث إعداد القناة: ${readableSupabaseError(err)}`, "bad");
     renderChannelsTab(); // إعادة الحالة القديمة بصريًا لأن الحفظ فشل
   }
 });
@@ -739,7 +751,7 @@ $("#btn-save-override").addEventListener("click", async () => {
     toast("تم حفظ الاستثناء", "ok");
   } catch (err) {
     console.error(err);
-    toast("تعذر حفظ الاستثناء", "bad");
+    toast(`تعذر حفظ الاستثناء: ${readableSupabaseError(err)}`, "bad");
   }
 });
 
@@ -755,7 +767,7 @@ $("#channel-override-list").addEventListener("click", async (e) => {
     toast("تمت إزالة الاستثناء", "ok");
   } catch (err) {
     console.error(err);
-    toast("تعذر إزالة الاستثناء", "bad");
+    toast(`تعذر إزالة الاستثناء: ${readableSupabaseError(err)}`, "bad");
   }
 });
 
