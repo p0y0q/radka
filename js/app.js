@@ -19,6 +19,10 @@ const state = {
   productCategoryFilter: "",
   editingProductId: null,
   aiPool: [],           // مفاتيح الذكاء الاصطناعي الاحتياطية (لوحة الأدمن فقط)
+  channelGlobalSettings: [], // إعداد كل قناة العام (لوحة الأدمن): [{channel, visibility, status}]
+  channelOverrides: [],      // استثناءات لمتاجر محددة (لوحة الأدمن): [{store_id, channel, visibility, status}]
+  channelOverrideModalChannel: null, // القناة المفتوح لها مودال الاستثناءات حاليًا
+  channelEffective: {},      // الحالة الفعلية لكل قناة لمتجر التاجر الحالي بعد دمج العام+الاستثناء
 };
 
 // ---------------------------------------------------------
@@ -229,6 +233,7 @@ async function enterAdmin() {
   await loadAdminData();
   renderAdminOverview();
   renderStoresGrid();
+  renderChannelsTab();
   renderApiSettingsTab();
   renderAnnouncementsTab();
   renderComplaintsTab();
@@ -239,13 +244,15 @@ async function enterAdmin() {
 
 async function loadAdminData() {
   try {
-    const [stores, orders, complaints, announcements, apiRows, aiPool] = await Promise.all([
+    const [stores, orders, complaints, announcements, apiRows, aiPool, channelSettings, channelOverrides] = await Promise.all([
       SB.select("stores", "select=*&order=created_at.desc"),
       SB.select("orders", "select=*&order=created_at.desc&limit=2000"),
       SB.select("complaints", "select=*&order=created_at.desc"),
       SB.select("announcements", "select=*&order=created_at.desc"),
       SB.select("api_settings", "select=*"),
       SB.select("ai_provider_pool", "select=*&order=priority.asc"),
+      SB.select("channel_global_settings", "select=*"),
+      SB.select("channel_store_overrides", "select=*"),
     ]);
     state.stores = stores;
     state.orders = orders;
@@ -254,6 +261,8 @@ async function loadAdminData() {
     state.apiSettings = {};
     apiRows.forEach(r => state.apiSettings[r.key_name] = r.key_value);
     state.aiPool = aiPool;
+    state.channelGlobalSettings = channelSettings;
+    state.channelOverrides = channelOverrides;
   } catch (err) {
     console.error(err);
     toast("خطأ في تحميل بيانات لوحة المشرف", "bad");
@@ -608,6 +617,148 @@ $("#save-global-api").addEventListener("click", async () => {
 });
 
 // ---- الإعلانات ----
+// ---------------------------------------------------------
+// إدارة القنوات (لوحة الأدمن): إظهار/إخفاء وتفعيل/إغلاق كل قناة عامًا،
+// مع إمكانية استثناء متاجر محددة من الإعداد العام
+// ---------------------------------------------------------
+function getChannelGlobalRow(channel) {
+  return state.channelGlobalSettings.find(r => r.channel === channel) || { visibility: "visible", status: "enabled" };
+}
+
+function renderChannelsTab() {
+  $("#admin-channels-list").innerHTML = ALL_CHANNELS.map(channel => {
+    const g = getChannelGlobalRow(channel);
+    const overridesCount = state.channelOverrides.filter(o => o.channel === channel).length;
+    return `
+    <div class="mini-product" style="align-items:center;flex-wrap:wrap;gap:14px;">
+      <div class="info" style="min-width:110px;">
+        <b>${METACHANNEL_LABELS[channel]}</b>
+        <span>${overridesCount ? `${overridesCount} استثناء لمتاجر محددة` : "بدون استثناءات"}</span>
+      </div>
+      <div class="channel-ai-row" style="border:none;padding:0;margin:0;">
+        <span>ظاهرة للتجار</span>
+        <label class="switch">
+          <input type="checkbox" class="channel-visibility-toggle" data-channel="${channel}" ${g.visibility !== "hidden" ? "checked" : ""}>
+          <span class="slider"></span>
+        </label>
+      </div>
+      <div class="channel-ai-row" style="border:none;padding:0;margin:0;">
+        <span>مفتوحة للربط</span>
+        <label class="switch">
+          <input type="checkbox" class="channel-status-toggle" data-channel="${channel}" ${g.status !== "disabled" ? "checked" : ""}>
+          <span class="slider"></span>
+        </label>
+      </div>
+      <button class="btn btn-outline btn-sm" data-open-override="${channel}">استثناءات لمتاجر محددة</button>
+    </div>`;
+  }).join("");
+}
+
+async function upsertChannelGlobalSetting(channel, patch) {
+  const exists = state.channelGlobalSettings.some(r => r.channel === channel);
+  if (exists) {
+    await SB.update("channel_global_settings", `channel=eq.${channel}`, { ...patch, updated_at: new Date().toISOString() });
+  } else {
+    await SB.insert("channel_global_settings", { channel, visibility: "visible", status: "enabled", ...patch });
+  }
+}
+
+$("#admin-channels-list").addEventListener("change", async (e) => {
+  const channel = e.target.dataset.channel;
+  if (!channel) return;
+  try {
+    if (e.target.classList.contains("channel-visibility-toggle")) {
+      await upsertChannelGlobalSetting(channel, { visibility: e.target.checked ? "visible" : "hidden" });
+    } else if (e.target.classList.contains("channel-status-toggle")) {
+      await upsertChannelGlobalSetting(channel, { status: e.target.checked ? "enabled" : "disabled" });
+    } else {
+      return;
+    }
+    await loadAdminData();
+    renderChannelsTab();
+    toast("تم تحديث إعداد القناة", "ok");
+  } catch (err) {
+    console.error(err);
+    toast("تعذر تحديث إعداد القناة", "bad");
+    renderChannelsTab(); // إعادة الحالة القديمة بصريًا لأن الحفظ فشل
+  }
+});
+
+$("#admin-channels-list").addEventListener("click", (e) => {
+  const channel = e.target.dataset.openOverride;
+  if (channel) openChannelOverrideModal(channel);
+});
+
+function openChannelOverrideModal(channel) {
+  state.channelOverrideModalChannel = channel;
+  $("#channel-override-title").textContent = `(${METACHANNEL_LABELS[channel]})`;
+  $("#ov-store-select").innerHTML = state.stores.map(s => `<option value="${s.id}">${escapeHtml(s.store_name)}</option>`).join("");
+  $("#ov-visibility-select").value = "";
+  $("#ov-status-select").value = "";
+  renderChannelOverrideList(channel);
+  $("#modal-channel-override").classList.add("show");
+}
+
+function renderChannelOverrideList(channel) {
+  const rows = state.channelOverrides.filter(o => o.channel === channel);
+  $("#channel-override-list").innerHTML = rows.length ? rows.map(o => {
+    const storeName = state.stores.find(s => s.id === o.store_id)?.store_name || "متجر محذوف";
+    const parts = [];
+    if (o.visibility) parts.push(o.visibility === "hidden" ? "مخفية" : "ظاهرة دائمًا");
+    if (o.status) parts.push(o.status === "disabled" ? "مغلقة دائمًا" : "مفتوحة دائمًا");
+    return `
+    <div class="mini-product">
+      <div class="info">
+        <b>${escapeHtml(storeName)}</b>
+        <span>${parts.join(" — ") || "بدون تخصيص"}</span>
+      </div>
+      <button class="btn btn-bad btn-sm" data-remove-override="${o.store_id}">إزالة</button>
+    </div>`;
+  }).join("") : `<div class="empty-state"><p>لا توجد استثناءات لهذه القناة</p></div>`;
+}
+
+$("#btn-save-override").addEventListener("click", async () => {
+  const channel = state.channelOverrideModalChannel;
+  const storeId = $("#ov-store-select").value;
+  const visibility = $("#ov-visibility-select").value || null;
+  const status = $("#ov-status-select").value || null;
+  if (!storeId) { toast("اختر متجرًا أولًا", "bad"); return; }
+  if (!visibility && !status) { toast("اختر إظهارًا أو حالة لتخصيصها، أو استخدم زر الإزالة لحذف استثناء قائم", "bad"); return; }
+
+  try {
+    const exists = state.channelOverrides.some(o => o.store_id === storeId && o.channel === channel);
+    const payload = { visibility, status, updated_at: new Date().toISOString() };
+    if (exists) {
+      await SB.update("channel_store_overrides", `store_id=eq.${storeId}&channel=eq.${channel}`, payload);
+    } else {
+      await SB.insert("channel_store_overrides", { store_id: storeId, channel, ...payload });
+    }
+    await loadAdminData();
+    renderChannelsTab();
+    renderChannelOverrideList(channel);
+    toast("تم حفظ الاستثناء", "ok");
+  } catch (err) {
+    console.error(err);
+    toast("تعذر حفظ الاستثناء", "bad");
+  }
+});
+
+$("#channel-override-list").addEventListener("click", async (e) => {
+  const storeId = e.target.dataset.removeOverride;
+  if (!storeId) return;
+  const channel = state.channelOverrideModalChannel;
+  try {
+    await SB.remove("channel_store_overrides", `store_id=eq.${storeId}&channel=eq.${channel}`);
+    await loadAdminData();
+    renderChannelsTab();
+    renderChannelOverrideList(channel);
+    toast("تمت إزالة الاستثناء", "ok");
+  } catch (err) {
+    console.error(err);
+    toast("تعذر إزالة الاستثناء", "bad");
+  }
+});
+
 function renderAnnouncementsTab() {
   const select = $("#ann-target");
   select.innerHTML = `<option value="">جميع المتاجر (عام)</option>` +
@@ -686,6 +837,7 @@ async function enterStore() {
   setChannelCardStatus("tiktok", "disconnected", "غير متصل");
   refreshWaStatus();
   refreshMetaStatus();
+  refreshChannelAvailability();
 }
 
 async function loadStoreData() {
@@ -713,7 +865,7 @@ async function loadStoreData() {
 $all(".nav-item[data-tab^='s-']").forEach(btn => {
   btn.addEventListener("click", () => {
     switchTab("s", btn.dataset.tab, "store-sidebar");
-    if (btn.dataset.tab === "s-whatsapp") { refreshWaStatus(); refreshMetaStatus(); }
+    if (btn.dataset.tab === "s-whatsapp") { refreshWaStatus(); refreshMetaStatus(); refreshChannelAvailability(); }
     if (btn.dataset.tab === "s-ai") renderStoreAiSettingsTab();
     if (btn.dataset.tab === "s-products") renderProductsTab();
   });
@@ -1052,6 +1204,52 @@ function setChannelCardStatus(channel, status, label) {
   labelEl.textContent = label;
 }
 
+// ---------------------------------------------------------
+// تطبيق تحكم الأدمن بالقنوات (إظهار/إخفاء وتفعيل/إغلاق) على لوحة التاجر
+// ---------------------------------------------------------
+async function refreshChannelAvailability() {
+  const storeId = state.session.data.id;
+  try {
+    const [globalRows, overrideRows] = await Promise.all([
+      SB.select("channel_global_settings", "select=*"),
+      SB.select("channel_store_overrides", `store_id=eq.${storeId}&select=*`),
+    ]);
+    const globalByChannel = Object.fromEntries(globalRows.map(r => [r.channel, r]));
+    const overrideByChannel = Object.fromEntries(overrideRows.map(r => [r.channel, r]));
+
+    const effective = {};
+    ALL_CHANNELS.forEach(channel => {
+      const g = globalByChannel[channel] || { visibility: "visible", status: "enabled" };
+      const o = overrideByChannel[channel] || {};
+      effective[channel] = {
+        visibility: o.visibility || g.visibility || "visible",
+        status: o.status || g.status || "enabled",
+      };
+    });
+    state.channelEffective = effective;
+    applyChannelAvailability();
+  } catch (err) {
+    console.error(err);
+    // تعذر جلب إعدادات القنوات: نترك كل القنوات كما هي (ظاهرة ومفتوحة) بدل تعطيل اللوحة بالكامل
+  }
+}
+
+function isChannelClosed(channel) {
+  return state.channelEffective[channel]?.status === "disabled";
+}
+
+function applyChannelAvailability() {
+  ALL_CHANNELS.forEach(channel => {
+    const card = $(`#channel-card-${channel}`);
+    if (!card) return;
+    const info = state.channelEffective[channel] || { visibility: "visible", status: "enabled" };
+    const hidden = info.visibility === "hidden";
+    const closed = info.status === "disabled";
+    card.classList.toggle("hidden", hidden);
+    card.classList.toggle("channel-closed", !hidden && closed);
+  });
+}
+
 async function refreshWaStatus() {
   const storeId = state.session.data.id;
   try {
@@ -1104,6 +1302,7 @@ $("#btn-wa-open-modal").addEventListener("click", () => {
 });
 
 $("#btn-wa-connect").addEventListener("click", async () => {
+  if (isChannelClosed("wa")) { toast("عذرًا، هذه القناة مغلقة في الوقت الحالي", "bad"); return; }
   showWaState("loading");
   setChannelCardStatus("wa", "pending", "جارٍ التحضير...");
   const storeId = state.session.data.id;
@@ -1148,7 +1347,8 @@ $("#btn-wa-disconnect").addEventListener("click", async () => {
 // ربط ماسنجر / انستغرام عبر Meta OAuth (لوحة المتجر)
 // ---------------------------------------------------------
 
-const METACHANNEL_LABELS = { messenger: "ماسنجر", instagram: "انستغرام", telegram: "تيليجرام", tiktok: "تيك توك" };
+const METACHANNEL_LABELS = { wa: "واتساب", messenger: "ماسنجر", instagram: "انستغرام", telegram: "تيليجرام", tiktok: "تيك توك" };
+const ALL_CHANNELS = ["wa", "messenger", "instagram", "telegram", "tiktok"];
 
 async function refreshMetaStatus() {
   const storeId = state.session.data.id;
@@ -1187,6 +1387,7 @@ async function refreshMetaStatus() {
 }
 
 function startMetaOAuth(channel) {
+  if (isChannelClosed(channel)) { toast("عذرًا، هذه القناة مغلقة في الوقت الحالي", "bad"); return; }
   const storeId = state.session.data.id;
   setChannelCardStatus(channel, "pending", "جارٍ فتح نافذة الربط...");
 
@@ -1237,6 +1438,7 @@ function startMetaOAuth(channel) {
 
 // ربط بوت تيليجرام: لا يوجد OAuth هنا، فقط نفتح مودال لصق التوكن
 function startTelegramConnect() {
+  if (isChannelClosed("telegram")) { toast("عذرًا، هذه القناة مغلقة في الوقت الحالي", "bad"); return; }
   $("#f-telegram-bot-token").value = "";
   $("#modal-telegram-connect").classList.add("show");
 }
