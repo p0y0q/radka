@@ -412,6 +412,48 @@
               </label>
             </div>
           </div>
+
+          <!-- بطاقة تيليجرام -->
+          <div class="channel-card telegram">
+            <div class="channel-icon">✈</div>
+            <div class="channel-name">تيليجرام</div>
+            <div class="channel-status-row disconnected" id="telegram-status-row">
+              <span class="channel-status-dot"></span>
+              <span id="telegram-status-label">غير متصل</span>
+            </div>
+            <div id="telegram-external-name" class="channel-external-name hidden"></div>
+            <button class="btn btn-primary btn-sm" id="btn-telegram-connect" style="width:100%;">ربط بوت تيليجرام</button>
+            <div class="sub" style="margin-top:6px;">أنشئ بوتًا خاصًا بمتجرك عبر محادثة @BotFather بتطبيق تيليجرام، والصق توكنه هنا</div>
+            <button class="btn btn-bad btn-sm hidden" id="btn-telegram-disconnect" style="width:100%;margin-top:8px;">فصل الربط</button>
+            <div class="channel-ai-row hidden" id="telegram-ai-row">
+              <span>تفعيل الذكاء الاصطناعي</span>
+              <label class="switch">
+                <input type="checkbox" id="telegram-ai-toggle">
+                <span class="slider"></span>
+              </label>
+            </div>
+          </div>
+
+          <!-- بطاقة تيك توك -->
+          <div class="channel-card tiktok">
+            <div class="channel-icon">♪</div>
+            <div class="channel-name">تيك توك</div>
+            <div class="channel-status-row disconnected" id="tiktok-status-row">
+              <span class="channel-status-dot"></span>
+              <span id="tiktok-status-label">غير متصل</span>
+            </div>
+            <div id="tiktok-external-name" class="channel-external-name hidden"></div>
+            <button class="btn btn-primary btn-sm" id="btn-tiktok-connect" style="width:100%;">ربط حساب تيك توك</button>
+            <div class="sub" style="margin-top:6px;">يتطلب حساب تيك توك Business وموافقة تيك توك على صلاحية الرسائل قبل أن يعمل الرد التلقائي فعليًا</div>
+            <button class="btn btn-bad btn-sm hidden" id="btn-tiktok-disconnect" style="width:100%;margin-top:8px;">فصل الربط</button>
+            <div class="channel-ai-row hidden" id="tiktok-ai-row">
+              <span>تفعيل الذكاء الاصطناعي</span>
+              <label class="switch">
+                <input type="checkbox" id="tiktok-ai-toggle">
+                <span class="slider"></span>
+              </label>
+            </div>
+          </div>
         </div>
 
         <p style="color:var(--ink-soft);font-size:12.5px;">
@@ -578,6 +620,26 @@
     </div>
     <p style="color:var(--ink-soft);font-size:13px;margin:-8px 0 14px;">حسابك مسؤول عن أكثر من صفحة على فيسبوك، اختر الصفحة التي تريد ربطها بمتجرك:</p>
     <div id="page-select-list" style="display:flex;flex-direction:column;gap:8px;max-height:360px;overflow-y:auto;"></div>
+  </div>
+</div>
+
+<!-- مودال ربط بوت تيليجرام (لصق التوكن مباشرة، بدون نافذة OAuth) -->
+<div class="modal-backdrop" id="modal-telegram-connect">
+  <div class="modal" style="max-width:420px;">
+    <div class="modal-head">
+      <h3>ربط بوت تيليجرام</h3>
+      <button class="modal-close" data-close="modal-telegram-connect">✕</button>
+    </div>
+    <p style="color:var(--ink-soft);font-size:13px;margin:-8px 0 14px;">
+      1) افتح تيليجرام وابحث عن <b>@BotFather</b><br>
+      2) أرسل له الأمر <b>/newbot</b> واتبع التعليمات لتسمية البوت<br>
+      3) سينشئ لك توكنًا (يشبه <span style="font-family:var(--font-mono);">123456:ABC-defGhIJ...</span>)، الصقه هنا:
+    </p>
+    <div class="field">
+      <label for="f-telegram-bot-token">توكن البوت</label>
+      <input type="text" id="f-telegram-bot-token" placeholder="مثال: 123456:ABC-defGhIJ..." dir="ltr">
+    </div>
+    <button class="btn btn-primary btn-sm" id="btn-telegram-connect-submit" style="width:100%;">ربط البوت</button>
   </div>
 </div>
 
