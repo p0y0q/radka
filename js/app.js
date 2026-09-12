@@ -729,31 +729,60 @@ function renderChannelOverrideList(channel) {
   }).join("") : `<div class="empty-state"><p>لا توجد استثناءات لهذه القناة</p></div>`;
 }
 
+// تحديث معالج حفظ الاستثناءات بجدول channel_store_overrides
 $("#btn-save-override").addEventListener("click", async () => {
   const channel = state.channelOverrideModalChannel;
   const storeId = $("#ov-store-select").value;
   const visibility = $("#ov-visibility-select").value || null;
   const status = $("#ov-status-select").value || null;
-  if (!storeId) { toast("اختر متجرًا أولًا", "bad"); return; }
-  if (!visibility && !status) { toast("اختر إظهارًا أو حالة لتخصيصها، أو استخدم زر الإزالة لحذف استثناء قائم", "bad"); return; }
+  
+  if (!storeId) { 
+    toast("اختر متجرًا أولًا", "bad"); 
+    return; 
+  }
+  if (!visibility && !status) { 
+    toast("اختر إظهارًا أو حالة لتخصيصها، أو استخدم زر الإزالة لحذف استثناء قائم", "bad"); 
+    return; 
+  }
 
   try {
     const exists = state.channelOverrides.some(o => o.store_id === storeId && o.channel === channel);
-    const payload = { visibility, status, updated_at: new Date().toISOString() };
+    const payload = { 
+      store_id: storeId, 
+      channel: channel, 
+      visibility: visibility, 
+      status: status, 
+      updated_at: new Date().toISOString() 
+    };
+
     if (exists) {
       await SB.update("channel_store_overrides", `store_id=eq.${storeId}&channel=eq.${channel}`, payload);
     } else {
-      await SB.insert("channel_store_overrides", { store_id: storeId, channel, ...payload });
+      await SB.insert("channel_store_overrides", payload);
     }
+
     await loadAdminData();
     renderChannelsTab();
     renderChannelOverrideList(channel);
-    toast("تم حفظ الاستثناء", "ok");
+    toast("تم حفظ الاستثناء بنجاح", "ok");
   } catch (err) {
     console.error(err);
     toast(`تعذر حفظ الاستثناء: ${readableSupabaseError(err)}`, "bad");
   }
 });
+
+// تحديث معالج مفتاح التفعيل والإظهار بجدول channel_global_settings
+async function upsertChannelGlobalSetting(channel, patch) {
+  const exists = state.channelGlobalSettings.some(r => r.channel === channel);
+  const payload = { channel, visibility: "visible", status: "enabled", ...patch, updated_at: new Date().toISOString() };
+  
+  if (exists) {
+    await SB.update("channel_global_settings", `channel=eq.${channel}`, payload);
+  } else {
+    await SB.insert("channel_global_settings", payload);
+  }
+}
+
 
 $("#channel-override-list").addEventListener("click", async (e) => {
   const storeId = e.target.dataset.removeOverride;
