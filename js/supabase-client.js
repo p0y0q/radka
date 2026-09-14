@@ -179,3 +179,119 @@ const MetaAPI = {
     return res.json();
   },
 };
+
+// =========================================================
+// عميل رموز التحقق عبر واتساب (OTP) — لصفحة إنشاء حساب جديد
+// =========================================================
+const OtpAPI = {
+  headers() {
+    return {
+      "Content-Type": "application/json",
+      "x-link-secret": LINK_SERVER.secret,
+    };
+  },
+
+  // يرسل رمز تحقق من 6 أرقام إلى رقم واتساب التاجر، صالح 5 دقائق
+  async send(phone) {
+    const res = await fetch(`${LINK_SERVER.baseUrl}/api/otp/send`, {
+      method: "POST",
+      headers: this.headers(),
+      body: JSON.stringify({ phone }),
+    });
+    const data = await res.json().catch(() => ({}));
+    if (!res.ok) {
+      const err = new Error(data.error || "send_failed");
+      err.data = data;
+      throw err;
+    }
+    return data; // { ok: true, expiresInSeconds }
+  },
+
+  // يتحقق من الرمز المُدخل مقابل آخر رمز مُرسل لهذا الرقم
+  async verify(phone, code) {
+    const res = await fetch(`${LINK_SERVER.baseUrl}/api/otp/verify`, {
+      method: "POST",
+      headers: this.headers(),
+      body: JSON.stringify({ phone, code }),
+    });
+    const data = await res.json().catch(() => ({}));
+    if (!res.ok) {
+      const err = new Error(data.error || "verify_failed");
+      err.data = data;
+      throw err;
+    }
+    return data; // { ok: true }
+  },
+};
+
+// =========================================================
+// عميل رسائل واتساب الأدمن (ربط أي رقم + إرسال جماعي/فردي)
+// =========================================================
+const AdminWaAPI = {
+  headers() {
+    return {
+      "Content-Type": "application/json",
+      "x-link-secret": LINK_SERVER.secret,
+    };
+  },
+
+  // حالة جلسة الربط الحالية: { status: 'qr'|'connecting'|'connected'|'disconnected', qr, number }
+  async status() {
+    const res = await fetch(`${LINK_SERVER.baseUrl}/api/admin-wa/status`, {
+      headers: this.headers(),
+    });
+    if (!res.ok) throw new Error(await res.text());
+    return res.json();
+  },
+
+  // فصل الرقم المربوط حاليًا
+  async disconnect() {
+    const res = await fetch(`${LINK_SERVER.baseUrl}/api/admin-wa/disconnect`, {
+      method: "POST",
+      headers: this.headers(),
+    });
+    if (!res.ok) throw new Error(await res.text());
+    return res.json();
+  },
+
+  // إرسال رسالة لرقم واحد فقط (رقم مخصص)
+  async sendOne(phone, message) {
+    const res = await fetch(`${LINK_SERVER.baseUrl}/api/admin-wa/send-one`, {
+      method: "POST",
+      headers: this.headers(),
+      body: JSON.stringify({ phone, message }),
+    });
+    const data = await res.json().catch(() => ({}));
+    if (!res.ok) {
+      const err = new Error(data.error || "send_failed");
+      err.data = data;
+      throw err;
+    }
+    return data;
+  },
+
+  // إرسال جماعي لعدة أرقام (كل أرقام جدول الاشتراك مثلاً)
+  async sendBulk(phones, message) {
+    const res = await fetch(`${LINK_SERVER.baseUrl}/api/admin-wa/send-bulk`, {
+      method: "POST",
+      headers: this.headers(),
+      body: JSON.stringify({ phones, message }),
+    });
+    const data = await res.json().catch(() => ({}));
+    if (!res.ok) {
+      const err = new Error(data.error || "send_failed");
+      err.data = data;
+      throw err;
+    }
+    return data; // { ok: true, total }
+  },
+
+  // متابعة تقدّم آخر عملية إرسال جماعي
+  async bulkStatus() {
+    const res = await fetch(`${LINK_SERVER.baseUrl}/api/admin-wa/bulk-status`, {
+      headers: this.headers(),
+    });
+    if (!res.ok) throw new Error(await res.text());
+    return res.json(); // { exists, total, sent, failed, done, results }
+  },
+};
