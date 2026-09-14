@@ -68,6 +68,7 @@
       <button class="nav-item active" data-tab="a-overview"><span class="ic">◆</span> نظرة عامة</button>
       <button class="nav-item" data-tab="a-stores"><span class="ic">▤</span> المتاجر</button>
       <button class="nav-item" data-tab="a-channels"><span class="ic">⛭</span> القنوات</button>
+      <button class="nav-item" data-tab="a-wa-messages"><span class="ic">◐</span> رسائل واتساب</button>
       <button class="nav-item" data-tab="a-api"><span class="ic">◈</span> إعدادات الذكاء الاصطناعي</button>
       <button class="nav-item" data-tab="a-announcements"><span class="ic">◉</span> الإعلانات</button>
       <button class="nav-item" data-tab="a-complaints"><span class="ic">✉</span> الشكاوى <span class="notif-dot" id="notif-dot-a-complaints"></span></button>
@@ -132,6 +133,77 @@
       </section>
 
       <!-- إعدادات API -->
+      <!-- رسائل واتساب -->
+      <section class="tab-panel hidden" id="tab-a-wa-messages">
+        <div class="topbar">
+          <div>
+            <h2>رسائل واتساب</h2>
+            <div class="sub">اربط أي رقم واتساب عبر الباركود، ثم أرسل رسائل مؤقتة لكل التجار المسجلين أو لرقم مخصص</div>
+          </div>
+        </div>
+
+        <!-- حالة الربط -->
+        <div class="panel">
+          <div class="panel-head"><h3>ربط رقم الإرسال</h3></div>
+
+          <div id="wa-admin-state-disconnected">
+            <p style="color:var(--ink-soft);font-size:13.5px;margin:0 0 14px;">لا يوجد رقم مربوط حاليًا. اضغط الزر أدناه لإظهار رمز QR وربط أي رقم واتساب تختاره.</p>
+            <button class="btn btn-primary btn-sm" id="btn-wa-admin-connect">ربط رقم جديد</button>
+          </div>
+
+          <div id="wa-admin-state-loading" class="hidden">
+            <p style="color:var(--ink-soft);font-size:13.5px;">جارٍ التحضير، انتظر لحظات...</p>
+          </div>
+
+          <div id="wa-admin-state-qr" class="hidden" style="text-align:center;">
+            <p style="color:var(--ink-soft);font-size:13.5px;margin-bottom:12px;">افتح واتساب على الرقم المطلوب ربطه ← الأجهزة المرتبطة ← ربط جهاز ← امسح الرمز:</p>
+            <img id="wa-admin-qr-img" src="" alt="QR" style="width:220px;height:220px;border:1px solid var(--line);border-radius:var(--radius-s);padding:8px;background:#fff;" />
+            <div style="margin-top:12px;"><button class="btn btn-outline btn-sm" id="btn-wa-admin-refresh-qr">تحديث الرمز</button></div>
+          </div>
+
+          <div id="wa-admin-state-connected" class="hidden">
+            <div class="checkbox-row" style="margin-bottom:14px;">
+              <span class="badge ok">متصل</span>
+              <span id="wa-admin-connected-number" style="font-family:var(--font-mono);"></span>
+            </div>
+            <button class="btn btn-bad btn-sm" id="btn-wa-admin-disconnect">فصل الرقم</button>
+          </div>
+        </div>
+
+        <!-- إرسال رسالة -->
+        <div class="panel">
+          <div class="panel-head"><h3>إرسال رسالة</h3></div>
+          <div class="form-grid">
+            <div class="field" style="grid-column:1/-1;">
+              <label>الجهة المستهدفة</label>
+              <select id="wa-msg-target">
+                <option value="all">كل التجار المسجلين (جدول الاشتراك)</option>
+                <option value="custom">رقم مخصص</option>
+              </select>
+            </div>
+            <div class="field hidden" id="wa-msg-custom-phone-field">
+              <label>رقم الهاتف المخصص</label>
+              <input type="tel" id="wa-msg-custom-phone" placeholder="07xxxxxxxxx" inputmode="numeric" style="font-family:var(--font-mono);">
+            </div>
+            <div class="field" style="grid-column:1/-1;">
+              <label>نص الرسالة</label>
+              <textarea id="wa-msg-text" rows="4" placeholder="اكتب نص الرسالة هنا..."></textarea>
+            </div>
+          </div>
+          <div style="margin-top:14px;display:flex;align-items:center;gap:12px;flex-wrap:wrap;">
+            <button class="btn btn-primary btn-sm" id="btn-wa-msg-send">إرسال</button>
+            <span id="wa-msg-recipient-count" style="font-size:12.5px;color:var(--ink-soft);"></span>
+          </div>
+
+          <div id="wa-bulk-progress" class="hidden" style="margin-top:16px;">
+            <div class="sub" id="wa-bulk-progress-label">جارٍ الإرسال...</div>
+            <div style="background:var(--paper);border:1px solid var(--line);border-radius:var(--radius-s);height:10px;overflow:hidden;margin-top:6px;">
+              <div id="wa-bulk-progress-bar" style="background:var(--palm);height:100%;width:0%;transition:width .3s ease;"></div>
+            </div>
+          </div>
+        </div>
+      </section>
+
       <section class="tab-panel hidden" id="tab-a-api">
         <div class="topbar">
           <div>
