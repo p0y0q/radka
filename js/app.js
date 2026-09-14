@@ -24,6 +24,9 @@ const state = {
   channelOverrides: [],      // استثناءات لمتاجر محددة (لوحة الأدمن): [{store_id, channel, visibility, status}]
   channelOverrideModalChannel: null, // القناة المفتوح لها مودال الاستثناءات حاليًا
   channelEffective: {},      // الحالة الفعلية لكل قناة لمتجر التاجر الحالي بعد دمج العام+الاستثناء
+  subscriptions: [],         // كل صفوف جدول الاشتراك (لوحة الأدمن - تبويب رسائل واتساب)
+  waAdminSenderPollTimer: null, // مؤقت فحص حالة ربط رقم إرسال الأدمن (رسائل واتساب)
+  waAdminBulkPollTimer: null,   // مؤقت متابعة تقدّم الإرسال الجماعي
 };
 
 // ---------------------------------------------------------
@@ -113,7 +116,7 @@ function validatePhone(phone) {
 // ---------------------------------------------------------
 function showLoginAlert(msg) {
   const a = $("#login-alert");
-  a.textContent = msg;
+  a.innerHTML = msg; // قد يحتوي رابط "من هنا" عند انتهاء الاشتراك
   a.classList.add("show");
 }
 function hideLoginAlert() { $("#login-alert").classList.remove("show"); }
@@ -143,27 +146,39 @@ $("#login-form").addEventListener("submit", async (e) => {
   btn.textContent = "جارٍ التحقق...";
 
   try {
-    // 1) البحث أولاً في قاعدة بيانات أصحاب المتاجر
-    const storeRows = await SB.select("stores", `phone=eq.${encodeURIComponent(phone)}&password=eq.${encodeURIComponent(password)}&select=*`);
+    // 1) البحث أولاً برقم الهاتف فقط في جدول الاشتراك (بغض النظر عن كلمة المرور)
+    //    حتى نستطيع تمييز حالة "الرقم صحيح لكن كلمة المرور خاطئة" عن "الاشتراك منتهي"
+    const subByPhone = await SB.select(
+      SUBSCRIPTION_TABLE,
+      `رقم=eq.${encodeURIComponent(phone)}&select=*`
+    );
 
-    if (storeRows.length > 0) {
-      if (storeRows[0].status === "suspended") {
-        showLoginAlert("هذا المتجر موقوف حاليًا. يرجى التواصل مع المشرف.");
-      } else {
-        state.session = { role: "store", data: storeRows[0] };
-        localStorage.setItem("wb_session", JSON.stringify(state.session));
-        await enterStore();
-      }
-    } else {
-      // 2) إذا لم يوجد في قاعدة بيانات المتاجر، يبحث في قاعدة بيانات المشرف العام
-      const adminRows = await SB.select("admins", `phone=eq.${encodeURIComponent(phone)}&password=eq.${encodeURIComponent(password)}&select=*`);
-      if (adminRows.length === 0) {
+    if (subByPhone.length > 0) {
+      const sub = subByPhone[0];
+      if (sub["كلمة_المرور"] !== password) {
         showLoginAlert("رقم الهاتف أو كلمة المرور غير صحيحة.");
-      } else {
-        state.session = { role: "admin", data: adminRows[0] };
-        localStorage.setItem("wb_session", JSON.stringify(state.session));
-        await enterAdmin();
+        return;
       }
+      if (sub["الحالة"] !== true) {
+        showLoginAlert(
+          `عذراً انتهت مهلة الاشتراك، قم بتجديد الخطة <a href="${RENEW_SUBSCRIPTION_URL}" target="_blank" rel="noopener">من هنا</a>`
+        );
+        return;
+      }
+      state.session = { role: "store", data: sub };
+      localStorage.setItem("wb_session", JSON.stringify(state.session));
+      await enterStore();
+      return;
+    }
+
+    // 2) إذا لم يوجد الرقم إطلاقًا في جدول الاشتراك، يبحث في جدول الأدمن
+    const adminRows = await SB.select("admins", `phone=eq.${encodeURIComponent(phone)}&password=eq.${encodeURIComponent(password)}&select=*`);
+    if (adminRows.length === 0) {
+      showLoginAlert("الرقم غير مسجل في النظام.");
+    } else {
+      state.session = { role: "admin", data: adminRows[0] };
+      localStorage.setItem("wb_session", JSON.stringify(state.session));
+      await enterAdmin();
     }
   } catch (err) {
     console.error(err);
@@ -180,6 +195,8 @@ function logout() {
   stopWaPolling();
   stopOrdersPolling();
   if (state.adminWaPollTimer) { clearInterval(state.adminWaPollTimer); state.adminWaPollTimer = null; }
+  stopWaAdminSenderPolling();
+  stopWaAdminBulkPolling();
   $("#login-form").reset();
   showScreen("screen-login");
 }
@@ -229,6 +246,7 @@ async function enterAdmin() {
   renderAnnouncementsTab();
   renderComplaintsTab();
   refreshAdminComplaintsBadge();
+  initWaMessagesTab();
 
   if (state.adminWaPollTimer) clearInterval(state.adminWaPollTimer);
   state.adminWaPollTimer = setInterval(refreshAdminWaBadges, 8000);
@@ -236,7 +254,7 @@ async function enterAdmin() {
 
 async function loadAdminData() {
   try {
-    const [stores, orders, complaints, announcements, apiRows, aiPool, channelSettings, channelOverrides] = await Promise.all([
+    const [stores, orders, complaints, announcements, apiRows, aiPool, channelSettings, channelOverrides, subscriptions] = await Promise.all([
       SB.select("stores", "select=*&order=created_at.desc"),
       SB.select("orders", "select=*&order=created_at.desc&limit=2000"),
       SB.select("complaints", "select=*&order=created_at.desc"),
@@ -245,6 +263,7 @@ async function loadAdminData() {
       SB.select("ai_provider_pool", "select=*&order=priority.asc"),
       SB.select("channel_global_settings", "select=*"),
       SB.select("channel_store_overrides", "select=*"),
+      SB.select(SUBSCRIPTION_TABLE, "select=*&order=created_at.desc"),
     ]);
     state.stores = stores;
     state.orders = orders;
@@ -255,6 +274,7 @@ async function loadAdminData() {
     state.aiPool = aiPool;
     state.channelGlobalSettings = channelSettings;
     state.channelOverrides = channelOverrides;
+    state.subscriptions = subscriptions;
   } catch (err) {
     console.error(err);
     toast("خطأ في تحميل بيانات لوحة المشرف", "bad");
@@ -844,6 +864,200 @@ $("#send-announcement").addEventListener("click", async () => {
     renderAnnouncementsTab();
   } catch (err) { console.error(err); toast("تعذر نشر الإعلان", "bad"); }
 });
+
+// =========================================================
+// رسائل واتساب (لوحة الأدمن) — ربط أي رقم وإرسال جماعي/فردي
+// =========================================================
+
+function initWaMessagesTab() {
+  refreshWaAdminSenderStatus();
+  updateWaRecipientCount();
+}
+
+function showWaAdminState(uiState) {
+  // uiState: 'disconnected' | 'loading' | 'qr' | 'connected'
+  $("#wa-admin-state-disconnected").classList.toggle("hidden", uiState !== "disconnected");
+  $("#wa-admin-state-loading").classList.toggle("hidden", uiState !== "loading");
+  $("#wa-admin-state-qr").classList.toggle("hidden", uiState !== "qr");
+  $("#wa-admin-state-connected").classList.toggle("hidden", uiState !== "connected");
+}
+
+async function refreshWaAdminSenderStatus() {
+  try {
+    const res = await AdminWaAPI.status();
+    applyWaAdminSenderStatus(res);
+  } catch (err) {
+    console.error(err);
+    showWaAdminState("disconnected");
+  }
+}
+
+function applyWaAdminSenderStatus(res) {
+  if (res.status === "connected") {
+    $("#wa-admin-connected-number").textContent = res.number ? `الرقم المرتبط: ${res.number}` : "";
+    showWaAdminState("connected");
+    stopWaAdminSenderPolling();
+  } else if (res.status === "qr" && res.qr) {
+    $("#wa-admin-qr-img").src = res.qr;
+    showWaAdminState("qr");
+    startWaAdminSenderPolling();
+  } else if (res.status === "connecting" || res.status === "pending") {
+    showWaAdminState("loading");
+    startWaAdminSenderPolling();
+  } else {
+    showWaAdminState("disconnected");
+    stopWaAdminSenderPolling();
+  }
+}
+
+function startWaAdminSenderPolling() {
+  if (state.waAdminSenderPollTimer) return;
+  state.waAdminSenderPollTimer = setInterval(refreshWaAdminSenderStatus, 4000);
+}
+function stopWaAdminSenderPolling() {
+  if (state.waAdminSenderPollTimer) { clearInterval(state.waAdminSenderPollTimer); state.waAdminSenderPollTimer = null; }
+}
+
+$("#btn-wa-admin-connect").addEventListener("click", async () => {
+  showWaAdminState("loading");
+  try {
+    // بدء الجلسة يستغرق حتى 12 ثانية بالسيرفر قبل إرجاع QR أو حالة الاتصال
+    const res = await AdminWaAPI.status();
+    applyWaAdminSenderStatus(res);
+  } catch (err) {
+    console.error(err);
+    toast("تعذر الاتصال بسيرفر الربط. تحقق من إعدادات LINK_SERVER بملف config.js", "bad");
+    showWaAdminState("disconnected");
+  }
+});
+
+$("#btn-wa-admin-refresh-qr").addEventListener("click", async () => {
+  showWaAdminState("loading");
+  try {
+    const res = await AdminWaAPI.status();
+    applyWaAdminSenderStatus(res);
+  } catch (err) {
+    console.error(err);
+    toast("تعذر تحديث رمز الربط", "bad");
+  }
+});
+
+$("#btn-wa-admin-disconnect").addEventListener("click", async () => {
+  if (!confirm("هل تريد فصل الرقم المربوط؟ ستحتاج لمسح رمز جديد لربط رقم آخر.")) return;
+  try {
+    await AdminWaAPI.disconnect();
+    toast("تم فصل الرقم", "ok");
+    showWaAdminState("disconnected");
+  } catch (err) {
+    console.error(err);
+    toast("تعذر فصل الرقم", "bad");
+  }
+});
+
+// ---- تحديد الجهة المستهدفة للإرسال ----
+$("#wa-msg-target").addEventListener("change", () => {
+  const isCustom = $("#wa-msg-target").value === "custom";
+  $("#wa-msg-custom-phone-field").classList.toggle("hidden", !isCustom);
+  updateWaRecipientCount();
+});
+
+function updateWaRecipientCount() {
+  const target = $("#wa-msg-target").value;
+  const label = $("#wa-msg-recipient-count");
+  if (target === "all") {
+    const count = state.subscriptions.length;
+    label.textContent = `سيتم الإرسال إلى ${count} رقم مسجّل بجدول الاشتراك`;
+  } else {
+    label.textContent = "";
+  }
+}
+
+// ---- إرسال الرسالة (فردي لرقم مخصص أو جماعي لكل المسجلين) ----
+$("#btn-wa-msg-send").addEventListener("click", async () => {
+  const target = $("#wa-msg-target").value;
+  const message = $("#wa-msg-text").value.trim();
+  if (!message) { toast("الرجاء كتابة نص الرسالة", "bad"); return; }
+
+  const btn = $("#btn-wa-msg-send");
+
+  if (target === "custom") {
+    const phone = $("#wa-msg-custom-phone").value.trim();
+    const v = validatePhone(phone);
+    if (!v.valid) { toast(v.msg, "bad"); return; }
+
+    btn.disabled = true; btn.textContent = "جارٍ الإرسال...";
+    try {
+      await AdminWaAPI.sendOne(phone, message);
+      toast("تم إرسال الرسالة", "ok");
+      $("#wa-msg-text").value = "";
+    } catch (err) {
+      console.error(err);
+      if (err.data?.error === "sender_not_connected") {
+        toast("لا يوجد رقم مربوط حاليًا. اربط رقمًا أولاً من الأعلى.", "bad");
+      } else {
+        toast("تعذر إرسال الرسالة", "bad");
+      }
+    } finally {
+      btn.disabled = false; btn.textContent = "إرسال";
+    }
+    return;
+  }
+
+  // إرسال جماعي لكل أرقام جدول الاشتراك
+  const phones = state.subscriptions.map(s => s["رقم"]).filter(Boolean);
+  if (phones.length === 0) { toast("لا يوجد أي رقم مسجّل بجدول الاشتراك حاليًا", "bad"); return; }
+  if (!confirm(`سيتم إرسال هذه الرسالة إلى ${phones.length} رقم. هل تريد المتابعة؟`)) return;
+
+  btn.disabled = true; btn.textContent = "جارٍ البدء...";
+  try {
+    const res = await AdminWaAPI.sendBulk(phones, message);
+    toast(`بدأ الإرسال إلى ${res.total} رقم`, "ok");
+    startWaAdminBulkPolling();
+  } catch (err) {
+    console.error(err);
+    if (err.data?.error === "sender_not_connected") {
+      toast("لا يوجد رقم مربوط حاليًا. اربط رقمًا أولاً من الأعلى.", "bad");
+    } else if (err.data?.error === "job_in_progress") {
+      toast("توجد عملية إرسال جماعي جارية بالفعل، انتظر انتهاءها", "bad");
+      startWaAdminBulkPolling();
+    } else {
+      toast("تعذر بدء الإرسال الجماعي", "bad");
+    }
+  } finally {
+    btn.disabled = false; btn.textContent = "إرسال";
+  }
+});
+
+function startWaAdminBulkPolling() {
+  $("#wa-bulk-progress").classList.remove("hidden");
+  if (state.waAdminBulkPollTimer) return;
+  state.waAdminBulkPollTimer = setInterval(refreshWaAdminBulkStatus, 2000);
+  refreshWaAdminBulkStatus();
+}
+function stopWaAdminBulkPolling() {
+  if (state.waAdminBulkPollTimer) { clearInterval(state.waAdminBulkPollTimer); state.waAdminBulkPollTimer = null; }
+}
+
+async function refreshWaAdminBulkStatus() {
+  try {
+    const job = await AdminWaAPI.bulkStatus();
+    if (!job.exists) { stopWaAdminBulkPolling(); $("#wa-bulk-progress").classList.add("hidden"); return; }
+
+    const percent = job.total ? Math.round(((job.sent + job.failed) / job.total) * 100) : 0;
+    $("#wa-bulk-progress-bar").style.width = `${percent}%`;
+    $("#wa-bulk-progress-label").textContent = job.done
+      ? `اكتمل الإرسال: ${job.sent} ناجحة، ${job.failed} فاشلة من أصل ${job.total}`
+      : `جارٍ الإرسال: ${job.sent + job.failed} من ${job.total} (${job.sent} ناجحة، ${job.failed} فاشلة)`;
+
+    if (job.done) {
+      stopWaAdminBulkPolling();
+      toast("اكتمل الإرسال الجماعي", "ok");
+    }
+  } catch (err) {
+    console.error(err);
+    stopWaAdminBulkPolling();
+  }
+}
 
 // ---- الشكاوى (عرض الأدمن) ----
 function renderComplaintsTab() {
