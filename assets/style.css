@@ -219,6 +219,7 @@ button { font-family: inherit; cursor: pointer; }
   margin-bottom: 16px;
 }
 .login-alert.show { display: block; }
+.login-alert a { text-decoration: underline; font-weight: 800; color: inherit; }
 
 .login-foot {
   margin-top: 20px;
