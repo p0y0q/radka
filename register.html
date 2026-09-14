@@ -1,0 +1,388 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1" />
+<title>إنشاء حساب جديد | Radka</title>
+<link rel="stylesheet" href="assets/style.css" />
+<style>
+  /* تنسيقات خاصة بصفحة التسجيل فقط */
+  .otp-box {
+    background: var(--palm-tint);
+    border: 1px solid rgba(31, 95, 79, 0.25);
+    border-radius: var(--radius-s);
+    padding: 14px;
+    margin-bottom: 18px;
+  }
+  .otp-box p { margin: 0 0 10px; font-size: 13px; color: var(--ink-soft); font-weight: 600; }
+  .otp-row { display: flex; gap: 8px; }
+  .otp-row input {
+    flex: 1;
+    text-align: center;
+    letter-spacing: 4px;
+    font-size: 18px;
+  }
+  .otp-actions {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-top: 10px;
+    font-size: 12.5px;
+  }
+  .otp-timer { color: var(--ink-soft); font-weight: 700; font-family: var(--font-mono); }
+  .otp-resend { background: none; border: none; color: var(--palm); font-weight: 700; cursor: pointer; padding: 0; }
+  .otp-resend:disabled { color: var(--ink-soft); cursor: not-allowed; opacity: .6; }
+
+  .agree-block { display: flex; flex-direction: column; gap: 10px; margin-bottom: 18px; }
+  .agree-row { display: flex; align-items: flex-start; gap: 8px; font-size: 13px; font-weight: 600; color: var(--ink-soft); }
+  .agree-row input[type="checkbox"] { margin-top: 3px; flex-shrink: 0; width: 16px; height: 16px; accent-color: var(--palm-deep); }
+  .agree-row a { color: var(--palm-deep); text-decoration: underline; font-weight: 800; }
+
+  .hidden-block { display: none; }
+  .success-block { text-align: center; padding: 10px 0; }
+  .success-block .glyph-ok {
+    width: 56px; height: 56px; border-radius: 50%;
+    background: var(--ok-tint); color: var(--ok);
+    display: grid; place-items: center; font-size: 28px; font-weight: 900;
+    margin: 0 auto 14px;
+  }
+</style>
+</head>
+<body>
+
+<div class="login-wrap">
+  <div class="login-card">
+    <div class="brand-mark">
+      <div class="glyph">وب</div>
+      <div class="text">
+        <h1>إنشاء حساب تاجر جديد</h1>
+        <p>سجّل بياناتك للبدء باستخدام المنصة</p>
+      </div>
+    </div>
+
+    <div class="login-alert" id="reg-alert"></div>
+
+    <!-- ============ نموذج البيانات الأساسية ============ -->
+    <form id="reg-form">
+      <div class="field">
+        <label for="reg-fullname">الاسم الكامل</label>
+        <input type="text" id="reg-fullname" placeholder="الاسم الكامل بالعربية" autocomplete="off" />
+        <div class="field-error" id="err-fullname">الاسم يجب أن يتكوّن من أحرف عربية فقط.</div>
+      </div>
+
+      <div class="field">
+        <label for="reg-phone">رقم الهاتف (المرتبط بواتساب)</label>
+        <input type="tel" id="reg-phone" placeholder="07xxxxxxxxx" inputmode="numeric" autocomplete="off" />
+        <div class="field-error" id="err-phone">رقم الهاتف يجب أن يبدأ بـ 07 ويتكوّن من 11 رقمًا بالضبط (أرقام فقط).</div>
+      </div>
+
+      <div class="field">
+        <label for="reg-password">كلمة المرور</label>
+        <input type="password" id="reg-password" placeholder="••••••••" autocomplete="off" />
+        <div class="field-error" id="err-password">6 إلى 16 حرفًا، بالإنجليزية فقط، وتحتوي على رقم وحرف كبير وحرف صغير على الأقل.</div>
+      </div>
+
+      <div class="field">
+        <label for="reg-password2">إعادة كلمة المرور</label>
+        <input type="password" id="reg-password2" placeholder="••••••••" autocomplete="off" />
+        <div class="field-error" id="err-password2">كلمتا المرور غير متطابقتين.</div>
+      </div>
+
+      <div class="agree-block">
+        <label class="agree-row">
+          <input type="checkbox" id="agree-privacy" />
+          <span>أوافق على <a href="privacy.html" target="_blank" rel="noopener">سياسة الخصوصية</a></span>
+        </label>
+        <label class="agree-row">
+          <input type="checkbox" id="agree-terms" />
+          <span>أوافق على <a href="terms.html" target="_blank" rel="noopener">شروط الخدمة</a></span>
+        </label>
+        <div class="field-error" id="err-agree">يجب الموافقة على سياسة الخصوصية وشروط الخدمة للمتابعة.</div>
+      </div>
+
+      <button type="submit" class="btn btn-primary" id="reg-submit">إنشاء حساب</button>
+    </form>
+
+    <!-- ============ خانة التحقق عبر واتساب (تظهر بعد نجاح التحقق من الرقم) ============ -->
+    <div id="otp-section" class="hidden-block">
+      <div class="otp-box">
+        <p>تم إرسال رمز تحقق مكوّن من 6 أرقام إلى رقم واتساب <b id="otp-phone-label"></b>. أدخله أدناه لإكمال إنشاء الحساب.</p>
+        <div class="otp-row">
+          <input type="text" id="otp-code" placeholder="000000" inputmode="numeric" maxlength="6" />
+          <button type="button" class="btn btn-primary" id="otp-verify-btn" style="width:auto;">تحقق</button>
+        </div>
+        <div class="otp-actions">
+          <span class="otp-timer" id="otp-timer">05:00</span>
+          <button type="button" class="otp-resend" id="otp-resend-btn" disabled>إعادة إرسال الرمز</button>
+        </div>
+      </div>
+      <div class="field-error" id="err-otp">الرمز غير صحيح، حاول مجددًا.</div>
+    </div>
+
+    <!-- ============ رسالة النجاح ============ -->
+    <div id="success-section" class="hidden-block success-block">
+      <div class="glyph-ok">✓</div>
+      <h2 style="margin:0 0 8px;font-size:17px;">تم إنشاء حسابك بنجاح</h2>
+      <p style="margin:0 0 18px;color:var(--ink-soft);font-size:13.5px;">
+        تم تفعيل خطتك المجانية لمدة 7 أيام. يمكنك الآن تسجيل الدخول.
+      </p>
+      <a href="index.html" class="btn btn-primary" style="display:block;">الذهاب لتسجيل الدخول</a>
+    </div>
+
+    <div class="login-foot">
+      لديك حساب بالفعل؟
+      <a href="index.html" style="color:var(--palm-deep);text-decoration:underline;font-weight:800;">تسجيل دخول</a>
+    </div>
+  </div>
+</div>
+
+<div id="toast-host" class="toast-host"></div>
+
+<script src="js/config.js"></script>
+<script src="js/supabase-client.js"></script>
+<script>
+// =========================================================
+// منطق صفحة إنشاء حساب جديد (مستقلة تمامًا عن باقي النظام)
+// =========================================================
+function $(sel) { return document.querySelector(sel); }
+
+function toast(msg, kind = "") {
+  const host = $("#toast-host");
+  const el = document.createElement("div");
+  el.className = `toast ${kind}`;
+  el.textContent = msg;
+  host.appendChild(el);
+  setTimeout(() => el.remove(), 3200);
+}
+
+function showAlert(msg) {
+  const a = $("#reg-alert");
+  a.innerHTML = msg;
+  a.classList.add("show");
+}
+function hideAlert() { $("#reg-alert").classList.remove("show"); }
+
+function showFieldError(inputEl, errorEl, show) {
+  inputEl.classList.toggle("err", !!show);
+  errorEl.classList.toggle("show", !!show);
+}
+
+// ---------------------------------------------------------
+// التحقق من صحة الحقول
+// ---------------------------------------------------------
+function isArabicName(name) {
+  // أحرف عربية ومسافات فقط (يسمح بالتشكيل البسيط أيضًا)
+  return /^[\u0600-\u06FF\s]+$/.test(name.trim()) && name.trim().length >= 3;
+}
+
+function validatePhone(phone) {
+  const p = (phone || "").trim();
+  if (!/^\d+$/.test(p)) return false;
+  if (!p.startsWith("07")) return false;
+  if (p.length !== 11) return false;
+  return true;
+}
+
+function validatePassword(pw) {
+  // إنجليزية فقط، 6-16 حرفًا، رقم واحد على الأقل + حرف كبير + حرف صغير
+  if (!/^[A-Za-z0-9]{6,16}$/.test(pw)) return false;
+  if (!/[0-9]/.test(pw)) return false;
+  if (!/[A-Z]/.test(pw)) return false;
+  if (!/[a-z]/.test(pw)) return false;
+  return true;
+}
+
+// إزالة أخطاء العرض عند الكتابة
+["reg-fullname", "reg-phone", "reg-password", "reg-password2"].forEach(id => {
+  $(`#${id}`).addEventListener("input", () => {
+    $(`#${id}`).classList.remove("err");
+    $(`#err-${id.replace("reg-", "")}`).classList.remove("show");
+  });
+});
+
+// ---------------------------------------------------------
+// حالة مؤقت انتهاء صلاحية رمز التحقق (5 دقائق)
+// ---------------------------------------------------------
+let otpTimerInterval = null;
+let otpSecondsLeft = 0;
+let pendingRegistration = null; // { fullName, phone, password }
+
+function startOtpTimer(totalSeconds) {
+  clearInterval(otpTimerInterval);
+  otpSecondsLeft = totalSeconds;
+  $("#otp-resend-btn").disabled = true;
+  updateOtpTimerLabel();
+  otpTimerInterval = setInterval(() => {
+    otpSecondsLeft -= 1;
+    updateOtpTimerLabel();
+    if (otpSecondsLeft <= 0) {
+      clearInterval(otpTimerInterval);
+      $("#otp-resend-btn").disabled = false;
+      $("#otp-timer").textContent = "انتهت صلاحية الرمز";
+    }
+  }, 1000);
+}
+
+function updateOtpTimerLabel() {
+  const m = Math.floor(otpSecondsLeft / 60).toString().padStart(2, "0");
+  const s = (otpSecondsLeft % 60).toString().padStart(2, "0");
+  $("#otp-timer").textContent = `${m}:${s}`;
+}
+
+// ---------------------------------------------------------
+// إرسال النموذج الأساسي: يتحقق من الحقول ثم يطابق الرقم بجدول الاشتراك
+// ---------------------------------------------------------
+$("#reg-form").addEventListener("submit", async (e) => {
+  e.preventDefault();
+  hideAlert();
+
+  const fullName = $("#reg-fullname").value.trim();
+  const phone = $("#reg-phone").value.trim();
+  const password = $("#reg-password").value;
+  const password2 = $("#reg-password2").value;
+  const agreePrivacy = $("#agree-privacy").checked;
+  const agreeTerms = $("#agree-terms").checked;
+
+  let hasError = false;
+
+  if (!isArabicName(fullName)) {
+    showFieldError($("#reg-fullname"), $("#err-fullname"), true);
+    hasError = true;
+  }
+  if (!validatePhone(phone)) {
+    showFieldError($("#reg-phone"), $("#err-phone"), true);
+    hasError = true;
+  }
+  if (!validatePassword(password)) {
+    showFieldError($("#reg-password"), $("#err-password"), true);
+    hasError = true;
+  }
+  if (password !== password2 || !password2) {
+    showFieldError($("#reg-password2"), $("#err-password2"), true);
+    hasError = true;
+  }
+  $("#err-agree").classList.toggle("show", !(agreePrivacy && agreeTerms));
+  if (!agreePrivacy || !agreeTerms) hasError = true;
+
+  if (hasError) return;
+
+  const btn = $("#reg-submit");
+  btn.disabled = true;
+  btn.textContent = "جارٍ التحقق...";
+
+  try {
+    // مطابقة الرقم في جدول الاشتراك
+    const rows = await SB.select(SUBSCRIPTION_TABLE, `رقم=eq.${encodeURIComponent(phone)}&select=رقم`);
+
+    if (rows.length > 0) {
+      showAlert(`هذا الرقم مسجل مسبقاً، قم <a href="index.html">بتسجيل الدخول</a>`);
+      return;
+    }
+
+    // الرقم غير موجود: أرسل رمز التحقق عبر واتساب
+    const sendResult = await OtpAPI.send(phone);
+
+    pendingRegistration = { fullName, phone, password };
+    $("#otp-phone-label").textContent = phone;
+    $("#reg-form").classList.add("hidden-block");
+    $("#otp-section").classList.remove("hidden-block");
+    startOtpTimer(sendResult.expiresInSeconds || 300);
+  } catch (err) {
+    console.error(err);
+    if (err.data?.error === "sender_not_connected") {
+      showAlert("تعذّر إرسال رمز التحقق حاليًا (رقم إرسال رموز التحقق غير مفعّل من قبل الإدارة). حاول لاحقًا.");
+    } else {
+      showAlert("تعذر الاتصال بالخادم. حاول مجددًا لاحقًا.");
+    }
+  } finally {
+    btn.disabled = false;
+    btn.textContent = "إنشاء حساب";
+  }
+});
+
+// ---------------------------------------------------------
+// إعادة إرسال رمز التحقق
+// ---------------------------------------------------------
+$("#otp-resend-btn").addEventListener("click", async () => {
+  if (!pendingRegistration) return;
+  const resendBtn = $("#otp-resend-btn");
+  resendBtn.disabled = true;
+  try {
+    const sendResult = await OtpAPI.send(pendingRegistration.phone);
+    toast("تم إرسال رمز جديد");
+    startOtpTimer(sendResult.expiresInSeconds || 300);
+  } catch (err) {
+    console.error(err);
+    if (err.data?.error === "cooldown") {
+      toast(`الرجاء الانتظار ${err.data.waitSeconds} ثانية قبل إعادة الإرسال`, "bad");
+    } else {
+      toast("تعذر إرسال الرمز، حاول مجددًا", "bad");
+    }
+    resendBtn.disabled = false;
+  }
+});
+
+// ---------------------------------------------------------
+// التحقق من الرمز المُدخل، ثم إنشاء الحساب فعليًا بجدول الاشتراك
+// ---------------------------------------------------------
+$("#otp-verify-btn").addEventListener("click", async () => {
+  const code = $("#otp-code").value.trim();
+  $("#err-otp").classList.remove("show");
+
+  if (!/^\d{6}$/.test(code)) {
+    $("#err-otp").textContent = "أدخل رمز التحقق المكوّن من 6 أرقام.";
+    $("#err-otp").classList.add("show");
+    return;
+  }
+  if (otpSecondsLeft <= 0) {
+    $("#err-otp").textContent = "انتهت صلاحية الرمز، اضغط إعادة إرسال.";
+    $("#err-otp").classList.add("show");
+    return;
+  }
+
+  const btn = $("#otp-verify-btn");
+  btn.disabled = true;
+  btn.textContent = "جارٍ التحقق...";
+
+  try {
+    await OtpAPI.verify(pendingRegistration.phone, code);
+
+    // نجح التحقق: أنشئ الحساب في جدول الاشتراك بخطة مجانية لمدة 7 أيام
+    const today = new Date();
+    const y = today.getFullYear();
+    const m = String(today.getMonth() + 1).padStart(2, "0");
+    const d = String(today.getDate()).padStart(2, "0");
+
+    await SB.insert(SUBSCRIPTION_TABLE, {
+      "رقم": pendingRegistration.phone,
+      "كلمة_المرور": pendingRegistration.password,
+      "الخطة": "free",
+      "تاريخ_الاشتراك": `${y}-${m}-${d}`,
+      "الحالة": true,
+      full_name: pendingRegistration.fullName,
+    });
+
+    clearInterval(otpTimerInterval);
+    $("#otp-section").classList.add("hidden-block");
+    $("#success-section").classList.remove("hidden-block");
+  } catch (err) {
+    console.error(err);
+    const code = err.data?.error;
+    if (code === "expired") {
+      $("#err-otp").textContent = "انتهت صلاحية الرمز، اضغط إعادة إرسال.";
+    } else if (code === "too_many_attempts") {
+      $("#err-otp").textContent = "عدد محاولات كثير جدًا، اطلب رمزًا جديدًا.";
+    } else if (code === "mismatch" || code === "not_found") {
+      $("#err-otp").textContent = "الرمز غير صحيح، حاول مجددًا.";
+    } else {
+      $("#err-otp").textContent = "تعذر إتمام العملية، حاول مجددًا.";
+    }
+    $("#err-otp").classList.add("show");
+  } finally {
+    btn.disabled = false;
+    btn.textContent = "تحقق";
+  }
+});
+</script>
+</body>
+</html>
