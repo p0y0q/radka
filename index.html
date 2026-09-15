@@ -37,7 +37,13 @@
         <button type="submit" class="btn btn-primary" id="login-submit">دخول</button>
       </form>
 
-      <div class="login-foot">جميع الحسابات مسجّلة مسبقًا من قِبل المشرف</div>
+      <div class="login-foot">
+        جميع الحسابات مسجّلة مسبقًا من قِبل المشرف
+        <div style="margin-top:8px;">
+          لا تمتلك حساب؟
+          <a href="register.html" style="color:var(--palm-deep);text-decoration:underline;font-weight:800;">تسجيل جديد</a>
+        </div>
+      </div>
     </div>
   </div>
 </div>
@@ -106,9 +112,8 @@
         <div class="topbar">
           <div>
             <h2>إدارة المتاجر</h2>
-            <div class="sub">إضافة وتعديل المتاجر ومنتجاتها وربط واتساب</div>
+            <div class="sub">التعديل، تمديد/إلغاء الاشتراك، الزبائن، القنوات المتصلة — التسجيل يتم ذاتيًا عبر صفحة إنشاء حساب فقط</div>
           </div>
-          <button class="btn btn-primary" id="btn-add-store">+ إضافة متجر</button>
         </div>
         <div class="panel">
           <div class="panel-head">
@@ -138,13 +143,42 @@
         <div class="topbar">
           <div>
             <h2>رسائل واتساب</h2>
-            <div class="sub">اربط أي رقم واتساب عبر الباركود، ثم أرسل رسائل مؤقتة لكل التجار المسجلين أو لرقم مخصص</div>
+            <div class="sub">اربط رقمين منفصلين: واحد لرموز التحقق عند التسجيل، وواحد لإرسال رسائل مؤقتة للتجار</div>
+          </div>
+        </div>
+
+        <!-- ربط رقم رموز التحقق (OTP) -->
+        <div class="panel">
+          <div class="panel-head"><h3>ربط رقم رموز التحقق (تسجيل حساب جديد)</h3></div>
+          <p style="color:var(--ink-soft);font-size:12.5px;margin:-6px 0 14px;">هذا الرقم منفصل عن رقم "إرسال رسائل واتساب" بالأسفل — يُستخدم فقط لإرسال كود التحقق المكوّن من 6 أرقام لحظة إنشاء حساب تاجر جديد بصفحة التسجيل.</p>
+
+          <div id="otp-admin-state-disconnected">
+            <p style="color:var(--ink-soft);font-size:13.5px;margin:0 0 14px;">لا يوجد رقم مربوط حاليًا. بدون ربطه، ستفشل عملية إنشاء حساب جديد عند خطوة إرسال كود التحقق.</p>
+            <button class="btn btn-primary btn-sm" id="btn-otp-admin-connect">ربط رقم جديد</button>
+          </div>
+
+          <div id="otp-admin-state-loading" class="hidden">
+            <p style="color:var(--ink-soft);font-size:13.5px;">جارٍ التحضير، انتظر لحظات...</p>
+          </div>
+
+          <div id="otp-admin-state-qr" class="hidden" style="text-align:center;">
+            <p style="color:var(--ink-soft);font-size:13.5px;margin-bottom:12px;">افتح واتساب على الرقم المطلوب ربطه ← الأجهزة المرتبطة ← ربط جهاز ← امسح الرمز:</p>
+            <img id="otp-admin-qr-img" src="" alt="QR" style="width:220px;height:220px;border:1px solid var(--line);border-radius:var(--radius-s);padding:8px;background:#fff;" />
+            <div style="margin-top:12px;"><button class="btn btn-outline btn-sm" id="btn-otp-admin-refresh-qr">تحديث الرمز</button></div>
+          </div>
+
+          <div id="otp-admin-state-connected" class="hidden">
+            <div class="checkbox-row" style="margin-bottom:14px;">
+              <span class="badge ok">متصل</span>
+              <span id="otp-admin-connected-number" style="font-family:var(--font-mono);"></span>
+            </div>
+            <button class="btn btn-bad btn-sm" id="btn-otp-admin-disconnect">فصل الرقم</button>
           </div>
         </div>
 
         <!-- حالة الربط -->
         <div class="panel">
-          <div class="panel-head"><h3>ربط رقم الإرسال</h3></div>
+          <div class="panel-head"><h3>ربط رقم الإرسال (رسائل جماعية/مخصصة)</h3></div>
 
           <div id="wa-admin-state-disconnected">
             <p style="color:var(--ink-soft);font-size:13.5px;margin:0 0 14px;">لا يوجد رقم مربوط حاليًا. اضغط الزر أدناه لإظهار رمز QR وربط أي رقم واتساب تختاره.</p>
@@ -841,6 +875,26 @@
           <option value="suspended">موقوف</option>
         </select>
       </div>
+      <div class="field">
+        <label>خطة الاشتراك</label>
+        <select id="f-plan">
+          <option value="free">مجانية (7 أيام)</option>
+          <option value="month">شهرية</option>
+          <option value="year">سنوية</option>
+        </select>
+      </div>
+      <div class="field">
+        <label>حالة الاشتراك</label>
+        <select id="f-is-active">
+          <option value="true">ساري</option>
+          <option value="false">منتهي (يحتاج تجديد)</option>
+        </select>
+      </div>
+      <div class="field">
+        <label>تاريخ نفاذ الاشتراك</label>
+        <input type="date" id="f-expires-at">
+        <div style="margin-top:6px;"><button type="button" class="btn btn-outline btn-sm" id="btn-extend-30">+ تمديد 30 يوم</button></div>
+      </div>
       <div class="field" style="grid-column:1/-1;">
         <label>رابط / بيانات الباركود للربط على واتساب</label>
         <input type="text" id="f-barcode" placeholder="رابط الربط أو نص QR">
@@ -880,6 +934,17 @@
         <tbody id="admin-customers-tbody"></tbody>
       </table>
     </div>
+  </div>
+</div>
+
+<!-- مودال قنوات متجر (من لوحة الأدمن) -->
+<div class="modal-backdrop" id="modal-store-channels">
+  <div class="modal">
+    <div class="modal-head">
+      <h3 id="channels-modal-title">قنوات المتجر</h3>
+      <button class="modal-close" data-close="modal-store-channels">✕</button>
+    </div>
+    <div id="admin-channels-body"></div>
   </div>
 </div>
 
