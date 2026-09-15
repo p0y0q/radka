@@ -17,8 +17,9 @@ const ORDERS_TABLE = "orders";
 // =========================================================
 const LINK_SERVER = {
   // رابط السيرفر بعد نشره على Fly.io، مثال: https://whatsapp-link-server.fly.dev
-  baseUrl: "/api/backend",
+  baseUrl: "https://radka.duckdns.org",
   // نفس القيمة الموجودة بملف .env الخاص بالسيرفر (LINK_SERVER_SECRET)
+  secret: "NewMohammed2027",
 };
 
 // =========================================================
