@@ -191,6 +191,25 @@ const OtpAPI = {
     };
   },
 
+  // حالة جلسة ربط رقم إرسال رموز التحقق: { status: 'qr'|'connecting'|'connected', qr, number }
+  async senderStatus() {
+    const res = await fetch(`${LINK_SERVER.baseUrl}/api/otp/sender-status`, {
+      headers: this.headers(),
+    });
+    if (!res.ok) throw new Error(await res.text());
+    return res.json();
+  },
+
+  // فصل الرقم المربوط حاليًا لإرسال رموز التحقق
+  async disconnectSender() {
+    const res = await fetch(`${LINK_SERVER.baseUrl}/api/otp/disconnect`, {
+      method: "POST",
+      headers: this.headers(),
+    });
+    if (!res.ok) throw new Error(await res.text());
+    return res.json();
+  },
+
   // يرسل رمز تحقق من 6 أرقام إلى رقم واتساب التاجر، صالح 5 دقائق
   async send(phone) {
     const res = await fetch(`${LINK_SERVER.baseUrl}/api/otp/send`, {
