@@ -27,6 +27,7 @@ const state = {
   subscriptions: [],         // كل صفوف جدول الاشتراك (لوحة الأدمن - تبويب رسائل واتساب)
   waAdminSenderPollTimer: null, // مؤقت فحص حالة ربط رقم إرسال الأدمن (رسائل واتساب)
   waAdminBulkPollTimer: null,   // مؤقت متابعة تقدّم الإرسال الجماعي
+  otpAdminSenderPollTimer: null, // مؤقت فحص حالة ربط رقم إرسال رموز التحقق (OTP)
 };
 
 // ---------------------------------------------------------
@@ -146,32 +147,29 @@ $("#login-form").addEventListener("submit", async (e) => {
   btn.textContent = "جارٍ التحقق...";
 
   try {
-    // 1) البحث أولاً برقم الهاتف فقط في جدول الاشتراك (بغض النظر عن كلمة المرور)
+    // 1) البحث أولاً برقم الهاتف فقط في جدول stores (بغض النظر عن كلمة المرور)
     //    حتى نستطيع تمييز حالة "الرقم صحيح لكن كلمة المرور خاطئة" عن "الاشتراك منتهي"
-    const subByPhone = await SB.select(
-      SUBSCRIPTION_TABLE,
-      `رقم=eq.${encodeURIComponent(phone)}&select=*`
-    );
+    const storeByPhone = await SB.select("stores", `phone=eq.${encodeURIComponent(phone)}&select=*`);
 
-    if (subByPhone.length > 0) {
-      const sub = subByPhone[0];
-      if (sub["كلمة_المرور"] !== password) {
+    if (storeByPhone.length > 0) {
+      const store = storeByPhone[0];
+      if (store.password !== password) {
         showLoginAlert("رقم الهاتف أو كلمة المرور غير صحيحة.");
         return;
       }
-      if (sub["الحالة"] !== true) {
+      if (store.is_active !== true) {
         showLoginAlert(
           `عذراً انتهت مهلة الاشتراك، قم بتجديد الخطة <a href="${RENEW_SUBSCRIPTION_URL}" target="_blank" rel="noopener">من هنا</a>`
         );
         return;
       }
-      state.session = { role: "store", data: sub };
+      state.session = { role: "store", data: store };
       localStorage.setItem("wb_session", JSON.stringify(state.session));
       await enterStore();
       return;
     }
 
-    // 2) إذا لم يوجد الرقم إطلاقًا في جدول الاشتراك، يبحث في جدول الأدمن
+    // 2) إذا لم يوجد الرقم إطلاقًا بجدول stores، يبحث في جدول الأدمن
     const adminRows = await SB.select("admins", `phone=eq.${encodeURIComponent(phone)}&password=eq.${encodeURIComponent(password)}&select=*`);
     if (adminRows.length === 0) {
       showLoginAlert("الرقم غير مسجل في النظام.");
@@ -197,6 +195,7 @@ function logout() {
   if (state.adminWaPollTimer) { clearInterval(state.adminWaPollTimer); state.adminWaPollTimer = null; }
   stopWaAdminSenderPolling();
   stopWaAdminBulkPolling();
+  stopOtpAdminSenderPolling();
   $("#login-form").reset();
   showScreen("screen-login");
 }
@@ -326,6 +325,7 @@ function storeOrderCount(storeId) {
 
 function storeCardHtml(s) {
   const orderCount = storeOrderCount(s.id);
+  const planLabel = { free: "مجانية", month: "شهرية", year: "سنوية" }[s.plan] || s.plan || "—";
   return `
   <div class="store-card" data-id="${s.id}">
     <div class="top">
@@ -339,6 +339,12 @@ function storeCardHtml(s) {
       <span>الطلبات: <b>${orderCount}</b></span>
       <span>البوت: <b style="font-family:var(--font-mono)">${escapeHtml(s.ai_phone || '—')}</b></span>
     </div>
+    <div class="stat-line">
+      <span>الخطة: <b>${planLabel}</b></span>
+      <span>${s.is_active
+        ? `<span class="badge ok">ساري حتى ${escapeHtml(s.expires_at || '—')}</span>`
+        : `<span class="badge bad">منتهي</span>`}</span>
+    </div>
     <div>
       ${s.whatsapp_connected
         ? `<span class="badge ok">مربوط واتساب${s.whatsapp_connected_number ? ' — ' + escapeHtml(s.whatsapp_connected_number) : ''}</span>`
@@ -346,6 +352,7 @@ function storeCardHtml(s) {
     </div>
     <div class="actions">
       <button class="btn btn-outline btn-sm" data-edit-store="${s.id}">تعديل</button>
+      <button class="btn btn-outline btn-sm" data-view-channels="${s.id}">القنوات</button>
       <button class="btn btn-outline btn-sm" data-view-customers="${s.id}">الزبائن</button>
       <button class="btn btn-bad btn-sm" data-delete-store="${s.id}">حذف</button>
     </div>
@@ -374,29 +381,34 @@ function wireStoreCardButtons(scopeSel) {
   $all(`${scopeSel} [data-edit-store]`).forEach(b => b.addEventListener("click", () => openStoreModal(b.dataset.editStore)));
   $all(`${scopeSel} [data-delete-store]`).forEach(b => b.addEventListener("click", () => deleteStore(b.dataset.deleteStore)));
   $all(`${scopeSel} [data-view-customers]`).forEach(b => b.addEventListener("click", () => openCustomersModal(b.dataset.viewCustomers)));
+  $all(`${scopeSel} [data-view-channels]`).forEach(b => b.addEventListener("click", () => openChannelsModal(b.dataset.viewChannels)));
 }
 
-// ---- إضافة / تعديل متجر ----
-$("#btn-add-store").addEventListener("click", () => openStoreModal(null));
+// ---- تعديل متجر فقط (لا إضافة — الإنشاء يتم حصرًا عبر register.html) ----
 
 function openStoreModal(storeId) {
+  if (!storeId) return; // لا يوجد وضع "إضافة" — الإنشاء حصرًا عبر register.html
   state.editingStoreId = storeId;
   const modal = $("#modal-store");
-  const s = storeId ? state.stores.find(x => x.id === storeId) : null;
+  const s = state.stores.find(x => x.id === storeId);
+  if (!s) return;
 
-  $("#store-modal-title").textContent = s ? "تعديل المتجر" : "إضافة متجر جديد";
-  $("#f-store-name").value = s?.store_name || "";
-  $("#f-full-name").value = s?.full_name || "";
-  $("#f-store-phone").value = s?.phone || "";
-  $("#f-store-password").value = s?.password || "";
-  $("#f-ai-phone").value = s?.ai_phone || "";
-  $("#f-status").value = s?.status || "active";
-  $("#f-barcode").value = s?.barcode_data || s?.whatsapp_link || "";
-  $("#f-notes").value = s?.notes || "";
+  $("#store-modal-title").textContent = "تعديل المتجر";
+  $("#f-store-name").value = s.store_name || "";
+  $("#f-full-name").value = s.full_name || "";
+  $("#f-store-phone").value = s.phone || "";
+  $("#f-store-password").value = s.password || "";
+  $("#f-ai-phone").value = s.ai_phone || "";
+  $("#f-status").value = s.status || "active";
+  $("#f-barcode").value = s.barcode_data || s.whatsapp_link || "";
+  $("#f-notes").value = s.notes || "";
+  $("#f-plan").value = s.plan || "free";
+  $("#f-is-active").value = String(s.is_active !== false);
+  $("#f-expires-at").value = s.expires_at || "";
 
   state.productsDraft = [];
   renderProductsDraft();
-  if (s) loadStoreProducts(s.id);
+  loadStoreProducts(s.id);
 
   modal.classList.add("show");
 }
@@ -457,6 +469,17 @@ $all("[data-close]").forEach(b => b.addEventListener("click", () => {
   $(`#${b.dataset.close}`).classList.remove("show");
 }));
 
+// تمديد سريع: يضيف 30 يومًا لتاريخ النفاذ الحالي (أو من اليوم إن كان منتهيًا) ويعيد التفعيل
+$("#btn-extend-30").addEventListener("click", () => {
+  const current = $("#f-expires-at").value;
+  const base = current && new Date(current) > new Date() ? new Date(current) : new Date();
+  base.setDate(base.getDate() + 30);
+  const y = base.getFullYear(), m = String(base.getMonth() + 1).padStart(2, "0"), d = String(base.getDate()).padStart(2, "0");
+  $("#f-expires-at").value = `${y}-${m}-${d}`;
+  $("#f-is-active").value = "true";
+  toast("جهّزنا تاريخ نفاذ جديد (+30 يوم) — اضغط حفظ المتجر لتثبيته", "ok");
+});
+
 $("#save-store-btn").addEventListener("click", async () => {
   const store_name = $("#f-store-name").value.trim();
   const full_name = $("#f-full-name").value.trim();
@@ -466,6 +489,9 @@ $("#save-store-btn").addEventListener("click", async () => {
   const status = $("#f-status").value;
   const barcode_data = $("#f-barcode").value.trim();
   const notes = $("#f-notes").value.trim();
+  const plan = $("#f-plan").value;
+  const is_active = $("#f-is-active").value === "true";
+  const expires_at = $("#f-expires-at").value || null;
 
   const v = validatePhone(phone);
   if (!v.valid) { toast(v.msg, "bad"); return; }
@@ -473,19 +499,19 @@ $("#save-store-btn").addEventListener("click", async () => {
   if (!password) { toast("الرجاء إدخال كلمة المرور.", "bad"); return; }
   if (!ai_phone) { toast("الرجاء إدخال رقم واتساب البوت المرتبط.", "bad"); return; }
 
-  const payload = { store_name, full_name, phone, password, ai_phone, status, barcode_data, notes };
+  const storeId = state.editingStoreId;
+  if (!storeId) { toast("لا يمكن إنشاء متجر جديد من هنا — التسجيل حصرًا عبر صفحة إنشاء حساب.", "bad"); return; }
+
+  // ملاحظة: تغيير "الخطة" هنا يعيد حساب تاريخ النفاذ ويعيد التفعيل تلقائيًا
+  // عبر trigger بقاعدة البيانات (نفس آلية "تمديد العضوية"). لتمديد بدون
+  // تغيير نوع الخطة، غيّر تاريخ النفاذ يدويًا من حقل "تاريخ نفاذ الاشتراك".
+  const payload = { store_name, full_name, phone, password, ai_phone, status, barcode_data, notes, plan, is_active, expires_at };
 
   const btn = $("#save-store-btn");
   btn.disabled = true; btn.textContent = "جارٍ الحفظ...";
 
   try {
-    let storeId = state.editingStoreId;
-    if (storeId) {
-      await SB.update("stores", `id=eq.${storeId}`, payload);
-    } else {
-      const created = await SB.insert("stores", payload);
-      storeId = created[0].id;
-    }
+    await SB.update("stores", `id=eq.${storeId}`, payload);
 
     // مزامنة المنتجات: نحذف القديمة (بدون id ثابت من db) ونعيد الإدخال بشكل مبسط
     const existing = await SB.select("products", `store_id=eq.${storeId}&select=id`);
@@ -527,6 +553,43 @@ async function deleteStore(id) {
   } catch (err) {
     console.error(err);
     toast("تعذر حذف المتجر", "bad");
+  }
+}
+
+// ---- عرض القنوات المتصلة/غير المتصلة لمتجر معين من لوحة الأدمن ----
+// (يعتمد على METACHANNEL_LABELS المُعرّف أدناه بنفس الملف)
+
+async function openChannelsModal(storeId) {
+  const s = state.stores.find(x => x.id === storeId);
+  if (!s) return;
+  $("#channels-modal-title").textContent = `قنوات متجر: ${s.store_name}`;
+  $("#admin-channels-body").innerHTML = `<div class="empty-state" style="padding:24px;"><p>جارٍ التحميل...</p></div>`;
+  $("#modal-store-channels").classList.add("show");
+
+  try {
+    const rows = await SB.select("channel_connections", `store_id=eq.${storeId}&select=channel,status,external_name,connected_at`);
+    const byChannel = {};
+    rows.forEach(r => byChannel[r.channel] = r);
+
+    const waConnected = !!s.whatsapp_connected;
+    const items = [
+      { key: "wa", connected: waConnected, name: s.whatsapp_connected_number || null },
+      ...ALL_CHANNELS.filter(c => c !== "wa").map(c => ({
+        key: c,
+        connected: byChannel[c]?.status === "connected",
+        name: byChannel[c]?.external_name || null,
+      })),
+    ];
+
+    $("#admin-channels-body").innerHTML = items.map(it => `
+      <div class="checkbox-row" style="justify-content:space-between;padding:10px 0;border-bottom:1px solid var(--line);">
+        <span>${METACHANNEL_LABELS[it.key] || it.key}${it.name ? ' — ' + escapeHtml(it.name) : ''}</span>
+        ${it.connected ? `<span class="badge ok">متصل</span>` : `<span class="badge bad">غير متصل</span>`}
+      </div>
+    `).join("");
+  } catch (err) {
+    console.error(err);
+    $("#admin-channels-body").innerHTML = `<div class="empty-state" style="padding:24px;"><p>تعذر تحميل حالة القنوات</p></div>`;
   }
 }
 
@@ -869,10 +932,95 @@ $("#send-announcement").addEventListener("click", async () => {
 // رسائل واتساب (لوحة الأدمن) — ربط أي رقم وإرسال جماعي/فردي
 // =========================================================
 
+// =========================================================
+// ربط رقم رموز التحقق (OTP) — جلسة منفصلة عن رقم رسائل واتساب أعلاه
+// =========================================================
+
 function initWaMessagesTab() {
+  refreshOtpAdminSenderStatus();
   refreshWaAdminSenderStatus();
   updateWaRecipientCount();
 }
+
+function showOtpAdminState(uiState) {
+  // uiState: 'disconnected' | 'loading' | 'qr' | 'connected'
+  $("#otp-admin-state-disconnected").classList.toggle("hidden", uiState !== "disconnected");
+  $("#otp-admin-state-loading").classList.toggle("hidden", uiState !== "loading");
+  $("#otp-admin-state-qr").classList.toggle("hidden", uiState !== "qr");
+  $("#otp-admin-state-connected").classList.toggle("hidden", uiState !== "connected");
+}
+
+async function refreshOtpAdminSenderStatus() {
+  try {
+    const res = await OtpAPI.senderStatus();
+    applyOtpAdminSenderStatus(res);
+  } catch (err) {
+    console.error(err);
+    showOtpAdminState("disconnected");
+  }
+}
+
+function applyOtpAdminSenderStatus(res) {
+  if (res.status === "connected") {
+    $("#otp-admin-connected-number").textContent = res.number ? `الرقم المرتبط: ${res.number}` : "";
+    showOtpAdminState("connected");
+    stopOtpAdminSenderPolling();
+  } else if (res.status === "qr" && res.qr) {
+    $("#otp-admin-qr-img").src = res.qr;
+    showOtpAdminState("qr");
+    startOtpAdminSenderPolling();
+  } else if (res.status === "connecting" || res.status === "pending") {
+    showOtpAdminState("loading");
+    startOtpAdminSenderPolling();
+  } else {
+    showOtpAdminState("disconnected");
+    stopOtpAdminSenderPolling();
+  }
+}
+
+function startOtpAdminSenderPolling() {
+  if (state.otpAdminSenderPollTimer) return;
+  state.otpAdminSenderPollTimer = setInterval(refreshOtpAdminSenderStatus, 4000);
+}
+function stopOtpAdminSenderPolling() {
+  if (state.otpAdminSenderPollTimer) { clearInterval(state.otpAdminSenderPollTimer); state.otpAdminSenderPollTimer = null; }
+}
+
+$("#btn-otp-admin-connect").addEventListener("click", async () => {
+  showOtpAdminState("loading");
+  try {
+    // بدء الجلسة يستغرق حتى 12 ثانية بالسيرفر قبل إرجاع QR أو حالة الاتصال
+    const res = await OtpAPI.senderStatus();
+    applyOtpAdminSenderStatus(res);
+  } catch (err) {
+    console.error(err);
+    toast("تعذر الاتصال بسيرفر الربط. تحقق من إعدادات LINK_SERVER بملف config.js", "bad");
+    showOtpAdminState("disconnected");
+  }
+});
+
+$("#btn-otp-admin-refresh-qr").addEventListener("click", async () => {
+  showOtpAdminState("loading");
+  try {
+    const res = await OtpAPI.senderStatus();
+    applyOtpAdminSenderStatus(res);
+  } catch (err) {
+    console.error(err);
+    toast("تعذر تحديث رمز الربط", "bad");
+  }
+});
+
+$("#btn-otp-admin-disconnect").addEventListener("click", async () => {
+  if (!confirm("هل تريد فصل رقم رموز التحقق؟ ستفشل عمليات إنشاء الحسابات الجديدة حتى تربط رقمًا آخر.")) return;
+  try {
+    await OtpAPI.disconnectSender();
+    toast("تم فصل الرقم", "ok");
+    showOtpAdminState("disconnected");
+  } catch (err) {
+    console.error(err);
+    toast("تعذر فصل الرقم", "bad");
+  }
+});
 
 function showWaAdminState(uiState) {
   // uiState: 'disconnected' | 'loading' | 'qr' | 'connected'
