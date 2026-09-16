@@ -291,6 +291,8 @@ $("#reg-form").addEventListener("submit", async (e) => {
     console.error(err);
     if (err.data?.error === "sender_not_connected") {
       showAlert("تعذّر إرسال رمز التحقق حاليًا (رقم إرسال رموز التحقق غير مفعّل من قبل الإدارة). حاول لاحقًا.");
+    } else if (err.data?.error === "quota_exceeded") {
+      showAlert("تم تجاوز الحد الشهري المسموح لإرسال رموز التحقق حاليًا. الرجاء المحاولة لاحقًا أو التواصل مع الإدارة.");
     } else if (err.data?.error === "send_timeout") {
       showAlert("تعذّر إرسال رمز التحقق (اتصال رقم الإرسال غير مستقر حاليًا). حاول مجددًا خلال دقيقة.");
     } else {
@@ -317,6 +319,8 @@ $("#otp-resend-btn").addEventListener("click", async () => {
     console.error(err);
     if (err.data?.error === "cooldown") {
       toast(`الرجاء الانتظار ${err.data.waitSeconds} ثانية قبل إعادة الإرسال`, "bad");
+    } else if (err.data?.error === "quota_exceeded") {
+      toast("تم تجاوز الحد الشهري المسموح لإرسال رموز التحقق حاليًا", "bad");
     } else {
       toast("تعذر إرسال الرمز، حاول مجددًا", "bad");
     }
