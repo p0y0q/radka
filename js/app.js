@@ -27,7 +27,6 @@ const state = {
   subscriptions: [],         // كل صفوف جدول الاشتراك (لوحة الأدمن - تبويب رسائل واتساب)
   waAdminSenderPollTimer: null, // مؤقت فحص حالة ربط رقم إرسال الأدمن (رسائل واتساب)
   waAdminBulkPollTimer: null,   // مؤقت متابعة تقدّم الإرسال الجماعي
-  otpAdminSenderPollTimer: null, // مؤقت فحص حالة ربط رقم إرسال رموز التحقق (OTP)
 };
 
 // ---------------------------------------------------------
@@ -195,7 +194,6 @@ function logout() {
   if (state.adminWaPollTimer) { clearInterval(state.adminWaPollTimer); state.adminWaPollTimer = null; }
   stopWaAdminSenderPolling();
   stopWaAdminBulkPolling();
-  stopOtpAdminSenderPolling();
   $("#login-form").reset();
   showScreen("screen-login");
 }
@@ -943,84 +941,24 @@ function initWaMessagesTab() {
 }
 
 function showOtpAdminState(uiState) {
-  // uiState: 'disconnected' | 'loading' | 'qr' | 'connected'
+  // uiState: 'disconnected' | 'loading' | 'connected'
   $("#otp-admin-state-disconnected").classList.toggle("hidden", uiState !== "disconnected");
   $("#otp-admin-state-loading").classList.toggle("hidden", uiState !== "loading");
-  $("#otp-admin-state-qr").classList.toggle("hidden", uiState !== "qr");
   $("#otp-admin-state-connected").classList.toggle("hidden", uiState !== "connected");
 }
 
 async function refreshOtpAdminSenderStatus() {
-  try {
-    const res = await OtpAPI.senderStatus();
-    applyOtpAdminSenderStatus(res);
-  } catch (err) {
-    console.error(err);
-    showOtpAdminState("disconnected");
-  }
-}
-
-function applyOtpAdminSenderStatus(res) {
-  if (res.status === "connected") {
-    $("#otp-admin-connected-number").textContent = res.number ? `الرقم المرتبط: ${res.number}` : "";
-    showOtpAdminState("connected");
-    stopOtpAdminSenderPolling();
-  } else if (res.status === "qr" && res.qr) {
-    $("#otp-admin-qr-img").src = res.qr;
-    showOtpAdminState("qr");
-    startOtpAdminSenderPolling();
-  } else if (res.status === "connecting" || res.status === "pending") {
-    showOtpAdminState("loading");
-    startOtpAdminSenderPolling();
-  } else {
-    showOtpAdminState("disconnected");
-    stopOtpAdminSenderPolling();
-  }
-}
-
-function startOtpAdminSenderPolling() {
-  if (state.otpAdminSenderPollTimer) return;
-  state.otpAdminSenderPollTimer = setInterval(refreshOtpAdminSenderStatus, 4000);
-}
-function stopOtpAdminSenderPolling() {
-  if (state.otpAdminSenderPollTimer) { clearInterval(state.otpAdminSenderPollTimer); state.otpAdminSenderPollTimer = null; }
-}
-
-$("#btn-otp-admin-connect").addEventListener("click", async () => {
-  showOtpAdminState("loading");
-  try {
-    // بدء الجلسة يستغرق حتى 12 ثانية بالسيرفر قبل إرجاع QR أو حالة الاتصال
-    const res = await OtpAPI.senderStatus();
-    applyOtpAdminSenderStatus(res);
-  } catch (err) {
-    console.error(err);
-    toast("تعذر الاتصال بسيرفر الربط. تحقق من إعدادات LINK_SERVER بملف config.js", "bad");
-    showOtpAdminState("disconnected");
-  }
-});
-
-$("#btn-otp-admin-refresh-qr").addEventListener("click", async () => {
   showOtpAdminState("loading");
   try {
     const res = await OtpAPI.senderStatus();
-    applyOtpAdminSenderStatus(res);
+    showOtpAdminState(res.status === "connected" ? "connected" : "disconnected");
   } catch (err) {
     console.error(err);
-    toast("تعذر تحديث رمز الربط", "bad");
-  }
-});
-
-$("#btn-otp-admin-disconnect").addEventListener("click", async () => {
-  if (!confirm("هل تريد فصل رقم رموز التحقق؟ ستفشل عمليات إنشاء الحسابات الجديدة حتى تربط رقمًا آخر.")) return;
-  try {
-    await OtpAPI.disconnectSender();
-    toast("تم فصل الرقم", "ok");
     showOtpAdminState("disconnected");
-  } catch (err) {
-    console.error(err);
-    toast("تعذر فصل الرقم", "bad");
   }
-});
+}
+
+$("#btn-otp-admin-refresh-status").addEventListener("click", refreshOtpAdminSenderStatus);
 
 function showWaAdminState(uiState) {
   // uiState: 'disconnected' | 'loading' | 'qr' | 'connected'
