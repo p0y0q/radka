@@ -230,7 +230,7 @@ function updateOtpTimerLabel() {
 }
 
 // ---------------------------------------------------------
-// إرسال النموذج الأساسي: يتحقق من الحقول ثم يطابق الرقم بجدول الاشتراك
+// إرسال النموذج الأساسي: يتحقق من الحقول ثم يطابق الرقم بجدول stores
 // ---------------------------------------------------------
 $("#reg-form").addEventListener("submit", async (e) => {
   e.preventDefault();
@@ -271,8 +271,8 @@ $("#reg-form").addEventListener("submit", async (e) => {
   btn.textContent = "جارٍ التحقق...";
 
   try {
-    // مطابقة الرقم في جدول الاشتراك
-    const rows = await SB.select(SUBSCRIPTION_TABLE, `رقم=eq.${encodeURIComponent(phone)}&select=رقم`);
+    // مطابقة الرقم في جدول stores مباشرة (نفس جدول المتاجر بلوحة الأدمن)
+    const rows = await SB.select("stores", `phone=eq.${encodeURIComponent(phone)}&select=phone`);
 
     if (rows.length > 0) {
       showAlert(`هذا الرقم مسجل مسبقاً، قم <a href="index.html">بتسجيل الدخول</a>`);
@@ -291,6 +291,8 @@ $("#reg-form").addEventListener("submit", async (e) => {
     console.error(err);
     if (err.data?.error === "sender_not_connected") {
       showAlert("تعذّر إرسال رمز التحقق حاليًا (رقم إرسال رموز التحقق غير مفعّل من قبل الإدارة). حاول لاحقًا.");
+    } else if (err.data?.error === "send_timeout") {
+      showAlert("تعذّر إرسال رمز التحقق (اتصال رقم الإرسال غير مستقر حاليًا). حاول مجددًا خلال دقيقة.");
     } else {
       showAlert("تعذر الاتصال بالخادم. حاول مجددًا لاحقًا.");
     }
@@ -323,7 +325,7 @@ $("#otp-resend-btn").addEventListener("click", async () => {
 });
 
 // ---------------------------------------------------------
-// التحقق من الرمز المُدخل، ثم إنشاء الحساب فعليًا بجدول الاشتراك
+// التحقق من الرمز المُدخل، ثم إنشاء الحساب فعليًا بجدول stores
 // ---------------------------------------------------------
 $("#otp-verify-btn").addEventListener("click", async () => {
   const code = $("#otp-code").value.trim();
@@ -347,19 +349,23 @@ $("#otp-verify-btn").addEventListener("click", async () => {
   try {
     await OtpAPI.verify(pendingRegistration.phone, code);
 
-    // نجح التحقق: أنشئ الحساب في جدول الاشتراك بخطة مجانية لمدة 7 أيام
+    // نجح التحقق: أنشئ الحساب مباشرة بجدول stores (نفس جدول المتاجر بلوحة
+    // الأدمن) بخطة مجانية لمدة 7 أيام — يظهر فورًا بخانة "المتاجر" بالأدمن
+    // دون أي خطوة وسيطة، لأنه نفس الصف بنفس الجدول.
     const today = new Date();
     const y = today.getFullYear();
     const m = String(today.getMonth() + 1).padStart(2, "0");
     const d = String(today.getDate()).padStart(2, "0");
 
-    await SB.insert(SUBSCRIPTION_TABLE, {
-      "رقم": pendingRegistration.phone,
-      "كلمة_المرور": pendingRegistration.password,
-      "الخطة": "free",
-      "تاريخ_الاشتراك": `${y}-${m}-${d}`,
-      "الحالة": true,
+    await SB.insert("stores", {
+      store_name: pendingRegistration.fullName, // اسم المتجر يبدأ باسم صاحبه، يقدر الأدمن يعدله لاحقًا
       full_name: pendingRegistration.fullName,
+      phone: pendingRegistration.phone,
+      password: pendingRegistration.password,
+      status: "active",
+      plan: "free",
+      subscribed_at: `${y}-${m}-${d}`,
+      is_active: true,
     });
 
     clearInterval(otpTimerInterval);
