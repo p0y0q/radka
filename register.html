@@ -331,31 +331,42 @@ $("#otp-resend-btn").addEventListener("click", async () => {
 // ---------------------------------------------------------
 // التحقق من الرمز المُدخل، ثم إنشاء الحساب فعليًا بجدول stores
 // ---------------------------------------------------------
+// ملاحظة: رمز التحقق يُستهلك (يُحذف من السيرفر) بعد أول تحقق ناجح منه، فلا
+// يصلح لإعادة استخدامه. لذلك نحفظ otpVerified محليًا حتى لو فشلت خطوة إنشاء
+// الحساب لاحقًا لأي سبب (خطأ مؤقت بقاعدة البيانات مثلًا)، يقدر يعيد المحاولة
+// بضغطة الزر بدون ما يحتاج يطلب رمزًا جديدًا من جديد.
+let otpVerified = false;
+
 $("#otp-verify-btn").addEventListener("click", async () => {
-  const code = $("#otp-code").value.trim();
+  const enteredCode = $("#otp-code").value.trim();
   $("#err-otp").classList.remove("show");
 
-  if (!/^\d{6}$/.test(code)) {
-    $("#err-otp").textContent = "أدخل رمز التحقق المكوّن من 6 أرقام.";
-    $("#err-otp").classList.add("show");
-    return;
-  }
-  if (otpSecondsLeft <= 0) {
-    $("#err-otp").textContent = "انتهت صلاحية الرمز، اضغط إعادة إرسال.";
-    $("#err-otp").classList.add("show");
-    return;
+  if (!otpVerified) {
+    if (!/^\d{6}$/.test(enteredCode)) {
+      $("#err-otp").textContent = "أدخل رمز التحقق المكوّن من 6 أرقام.";
+      $("#err-otp").classList.add("show");
+      return;
+    }
+    if (otpSecondsLeft <= 0) {
+      $("#err-otp").textContent = "انتهت صلاحية الرمز، اضغط إعادة إرسال.";
+      $("#err-otp").classList.add("show");
+      return;
+    }
   }
 
   const btn = $("#otp-verify-btn");
   btn.disabled = true;
-  btn.textContent = "جارٍ التحقق...";
+  btn.textContent = otpVerified ? "جارٍ إنشاء الحساب..." : "جارٍ التحقق...";
 
   try {
-    await OtpAPI.verify(pendingRegistration.phone, code);
+    if (!otpVerified) {
+      await OtpAPI.verify(pendingRegistration.phone, enteredCode);
+      otpVerified = true; // الرمز صحيح ومُستهلك الآن — أي إعادة محاولة لاحقة تتجاوز هذه الخطوة مباشرة
+    }
 
     // نجح التحقق: أنشئ الحساب مباشرة بجدول stores (نفس جدول المتاجر بلوحة
-    // الأدمن) بخطة مجانية لمدة 7 أيام — يظهر فورًا بخانة "المتاجر" بالأدمن
-    // دون أي خطوة وسيطة، لأنه نفس الصف بنفس الجدول.
+    // الأدمن) بخطة مجانية — يظهر فورًا بخانة "المتاجر" بالأدمن دون أي خطوة
+    // وسيطة، لأنه نفس الصف بنفس الجدول.
     const today = new Date();
     const y = today.getFullYear();
     const m = String(today.getMonth() + 1).padStart(2, "0");
@@ -366,6 +377,7 @@ $("#otp-verify-btn").addEventListener("click", async () => {
       full_name: pendingRegistration.fullName,
       phone: pendingRegistration.phone,
       password: pendingRegistration.password,
+      ai_phone: pendingRegistration.phone, // رقم واتساب البوت — نبدأ بنفس رقم التاجر الموثّق بالـ OTP (عمود إجباري بقاعدة البيانات)، ويقدر يغيّره لاحقًا لرقم مخصص من لوحة المتجر
       status: "active",
       plan: "free",
       subscribed_at: `${y}-${m}-${d}`,
@@ -377,20 +389,25 @@ $("#otp-verify-btn").addEventListener("click", async () => {
     $("#success-section").classList.remove("hidden-block");
   } catch (err) {
     console.error(err);
-    const code = err.data?.error;
-    if (code === "expired") {
-      $("#err-otp").textContent = "انتهت صلاحية الرمز، اضغط إعادة إرسال.";
-    } else if (code === "too_many_attempts") {
-      $("#err-otp").textContent = "عدد محاولات كثير جدًا، اطلب رمزًا جديدًا.";
-    } else if (code === "mismatch" || code === "not_found") {
-      $("#err-otp").textContent = "الرمز غير صحيح، حاول مجددًا.";
+    const errorCode = err.data?.error;
+    if (!otpVerified) {
+      if (errorCode === "expired") {
+        $("#err-otp").textContent = "انتهت صلاحية الرمز، اضغط إعادة إرسال.";
+      } else if (errorCode === "too_many_attempts") {
+        $("#err-otp").textContent = "عدد محاولات كثير جدًا، اطلب رمزًا جديدًا.";
+      } else if (errorCode === "mismatch" || errorCode === "not_found") {
+        $("#err-otp").textContent = "الرمز غير صحيح، حاول مجددًا.";
+      } else {
+        $("#err-otp").textContent = "تعذر إتمام العملية، حاول مجددًا.";
+      }
     } else {
-      $("#err-otp").textContent = "تعذر إتمام العملية، حاول مجددًا.";
+      // الرمز تحقّق منه بنجاح فعلاً؛ الخطأ هنا بخطوة إنشاء الحساب نفسها
+      $("#err-otp").textContent = "تم التحقق من الرمز، لكن تعذر إنشاء الحساب. اضغط الزر مرة أخرى لإعادة المحاولة.";
     }
     $("#err-otp").classList.add("show");
   } finally {
     btn.disabled = false;
-    btn.textContent = "تحقق";
+    btn.textContent = otpVerified ? "إعادة محاولة إنشاء الحساب" : "تحقق";
   }
 });
 </script>
