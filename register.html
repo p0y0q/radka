@@ -291,9 +291,9 @@ $("#reg-form").addEventListener("submit", async (e) => {
     console.error(err);
     if (err.data?.error === "sender_not_connected") {
       showAlert("تعذّر إرسال رمز التحقق حاليًا (رقم إرسال رموز التحقق غير مفعّل من قبل الإدارة). حاول لاحقًا.");
-    } else if (err.data?.error === "quota_exceeded") {
-      showAlert("تم تجاوز الحد الشهري المسموح لإرسال رموز التحقق حاليًا. الرجاء المحاولة لاحقًا أو التواصل مع الإدارة.");
-    } else if (err.data?.error === "send_timeout") {
+    } else if (err.data?.error === "cooldown") {
+      showAlert(`الرجاء الانتظار ${err.data.waitSeconds || 60} ثانية قبل إعادة المحاولة بنفس الرقم.`);
+    } else if (err.data?.error === "send_failed") {
       showAlert("تعذّر إرسال رمز التحقق (اتصال رقم الإرسال غير مستقر حاليًا). حاول مجددًا خلال دقيقة.");
     } else {
       showAlert("تعذر الاتصال بالخادم. حاول مجددًا لاحقًا.");
@@ -319,8 +319,8 @@ $("#otp-resend-btn").addEventListener("click", async () => {
     console.error(err);
     if (err.data?.error === "cooldown") {
       toast(`الرجاء الانتظار ${err.data.waitSeconds} ثانية قبل إعادة الإرسال`, "bad");
-    } else if (err.data?.error === "quota_exceeded") {
-      toast("تم تجاوز الحد الشهري المسموح لإرسال رموز التحقق حاليًا", "bad");
+    } else if (err.data?.error === "sender_not_connected") {
+      toast("رقم إرسال رموز التحقق غير مفعّل حاليًا من قبل الإدارة", "bad");
     } else {
       toast("تعذر إرسال الرمز، حاول مجددًا", "bad");
     }
