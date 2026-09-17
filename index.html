@@ -147,32 +147,32 @@
           </div>
         </div>
 
-        <!-- رقم رموز التحقق (OTP) عبر Wappfly.com -->
+        <!-- رقم رموز التحقق (OTP) عبر Baileys مباشرة -->
         <div class="panel">
           <div class="panel-head"><h3>رقم رموز التحقق (تسجيل حساب جديد)</h3></div>
-          <p style="color:var(--ink-soft);font-size:12.5px;margin:-6px 0 14px;">يُستخدم لإرسال كود التحقق المكوّن من 6 أرقام لحظة إنشاء حساب تاجر جديد بصفحة التسجيل، عبر خدمة Wappfly.com السحابية (منفصل تمامًا عن رقم "إرسال رسائل واتساب" بالأسفل، الذي لا يزال يعمل عبر ربط QR مباشر).</p>
+          <p style="color:var(--ink-soft);font-size:12.5px;margin:-6px 0 14px;">يُستخدم لإرسال كود التحقق المكوّن من 6 أرقام لحظة إنشاء حساب تاجر جديد بصفحة التسجيل، عبر رقم واتساب مربوط مباشرة بنفس آلية ربط رقم "إرسال رسائل واتساب" بالأسفل — بدون أي خدمة سحابية وسيطة وبدون أي حصة شهرية. جلسة منفصلة تمامًا عن رقم الإرسال الجماعي، اربطه برقم مخصص لرموز التحقق فقط.</p>
 
           <div id="otp-admin-state-disconnected">
-            <p style="color:var(--ink-soft);font-size:13.5px;margin:0 0 14px;">لا يوجد توكن Wappfly مُعدّ حاليًا بملف .env بالسيرفر (<code>WAPPFLY_API_TOKEN</code>)، فستفشل عملية إنشاء حساب جديد عند خطوة إرسال كود التحقق.</p>
-            <ol style="color:var(--ink-soft);font-size:13px;padding-inline-start:18px;margin:0 0 14px;">
-              <li>أنشئ حسابًا مجانيًا على <a href="https://wappfly.com" target="_blank" rel="noopener">wappfly.com</a> (بدون بطاقة ائتمان)</li>
-              <li>اضغط "New session" وامسح رمز QR من رقم واتساب المخصص لرموز التحقق</li>
-              <li>انسخ "API Token" من لوحة تحكم Wappfly</li>
-              <li>ضعه بملف <code>.env</code> بالسيرفر كـ <code>WAPPFLY_API_TOKEN</code> وأعد تشغيل PM2</li>
-            </ol>
-            <button class="btn btn-outline btn-sm" id="btn-otp-admin-refresh-status">تحديث الحالة</button>
+            <p style="color:var(--ink-soft);font-size:13.5px;margin:0 0 14px;">لا يوجد رقم مربوط حاليًا لإرسال رموز التحقق، فستفشل عملية إنشاء حساب جديد عند خطوة إرسال كود التحقق حتى تربط رقمًا. اضغط الزر أدناه لإظهار رمز QR.</p>
+            <button class="btn btn-primary btn-sm" id="btn-otp-admin-connect">ربط رقم جديد</button>
           </div>
 
           <div id="otp-admin-state-loading" class="hidden">
-            <p style="color:var(--ink-soft);font-size:13.5px;">جارٍ التحقق من الإعداد...</p>
+            <p style="color:var(--ink-soft);font-size:13.5px;">جارٍ التحضير، انتظر لحظات...</p>
+          </div>
+
+          <div id="otp-admin-state-qr" class="hidden" style="text-align:center;">
+            <p style="color:var(--ink-soft);font-size:13.5px;margin-bottom:12px;">افتح واتساب على الرقم المخصص لرموز التحقق ← الأجهزة المرتبطة ← ربط جهاز ← امسح الرمز:</p>
+            <img id="otp-admin-qr-img" src="" alt="QR" style="width:220px;height:220px;border:1px solid var(--line);border-radius:var(--radius-s);padding:8px;background:#fff;" />
+            <div style="margin-top:12px;"><button class="btn btn-outline btn-sm" id="btn-otp-admin-refresh-qr">تحديث الرمز</button></div>
           </div>
 
           <div id="otp-admin-state-connected" class="hidden">
             <div class="checkbox-row" style="margin-bottom:14px;">
-              <span class="badge ok">مُفعّل</span>
-              <span>توكن Wappfly معدّ بنجاح بالسيرفر</span>
+              <span class="badge ok">متصل</span>
+              <span id="otp-admin-connected-number" style="font-family:var(--font-mono);"></span>
             </div>
-            <p style="color:var(--ink-soft);font-size:12.5px;margin:0;">لفصل الرقم أو ربط رقم آخر، عدّل الجلسة مباشرة من لوحة تحكم <a href="https://wappfly.com" target="_blank" rel="noopener">wappfly.com</a>.</p>
+            <button class="btn btn-bad btn-sm" id="btn-otp-admin-disconnect">فصل الرقم</button>
           </div>
         </div>
 
