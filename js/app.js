@@ -24,7 +24,9 @@ const state = {
   channelOverrides: [],      // استثناءات لمتاجر محددة (لوحة الأدمن): [{store_id, channel, visibility, status}]
   channelOverrideModalChannel: null, // القناة المفتوح لها مودال الاستثناءات حاليًا
   channelEffective: {},      // الحالة الفعلية لكل قناة لمتجر التاجر الحالي بعد دمج العام+الاستثناء
-  subscriptions: [],         // كل صفوف جدول الاشتراك (لوحة الأدمن - تبويب رسائل واتساب)
+  subscribeRequests: [],     // صفوف جدول subscribe (طلبات/معاملات الاشتراك المدفوع - تبويب الاشتراكات بلوحة الأدمن)
+  subscriptionSettings: { monthly_price: 15000, yearly_price: 170000 },
+  discountCodes: [],
   waAdminSenderPollTimer: null, // مؤقت فحص حالة ربط رقم إرسال الأدمن (رسائل واتساب)
   waAdminBulkPollTimer: null,   // مؤقت متابعة تقدّم الإرسال الجماعي
   otpAdminSenderPollTimer: null, // مؤقت فحص حالة ربط رقم إرسال رموز التحقق (OTP)
@@ -240,6 +242,7 @@ async function enterAdmin() {
   await loadAdminData();
   renderAdminOverview();
   renderStoresGrid();
+  renderSubscriptionsTab();
   renderChannelsTab();
   renderApiSettingsTab();
   renderAnnouncementsTab();
@@ -253,7 +256,7 @@ async function enterAdmin() {
 
 async function loadAdminData() {
   try {
-    const [stores, orders, complaints, announcements, apiRows, aiPool, channelSettings, channelOverrides, subscriptions] = await Promise.all([
+    const [stores, orders, complaints, announcements, apiRows, aiPool, channelSettings, channelOverrides, subscribeRows, subSettingsRows, discountCodes] = await Promise.all([
       SB.select("stores", "select=*&order=created_at.desc"),
       SB.select("orders", "select=*&order=created_at.desc&limit=2000"),
       SB.select("complaints", "select=*&order=created_at.desc"),
@@ -262,7 +265,9 @@ async function loadAdminData() {
       SB.select("ai_provider_pool", "select=*&order=priority.asc"),
       SB.select("channel_global_settings", "select=*"),
       SB.select("channel_store_overrides", "select=*"),
-      SB.select(SUBSCRIPTION_TABLE, "select=*&order=created_at.desc"),
+      SB.select("subscribe", "select=*&order=created_at.desc"),
+      SB.select("subscription_settings", "id=eq.1&select=*"),
+      SB.select("discount_codes", "select=*&order=created_at.desc"),
     ]);
     state.stores = stores;
     state.orders = orders;
@@ -273,7 +278,9 @@ async function loadAdminData() {
     state.aiPool = aiPool;
     state.channelGlobalSettings = channelSettings;
     state.channelOverrides = channelOverrides;
-    state.subscriptions = subscriptions;
+    state.subscribeRequests = subscribeRows;
+    state.subscriptionSettings = (subSettingsRows && subSettingsRows[0]) || { monthly_price: 15000, yearly_price: 170000 };
+    state.discountCodes = discountCodes;
   } catch (err) {
     console.error(err);
     toast("خطأ في تحميل بيانات لوحة المشرف", "bad");
@@ -716,6 +723,196 @@ function readableSupabaseError(err) {
   }
 }
 
+// =========================================================
+// تبويب "الاشتراكات" (لوحة الأدمن): أسعار الخطط، أكواد الخصم، وطلبات الاشتراك
+// =========================================================
+state.subscribeFilter = "pending";
+
+function renderSubscriptionsTab() {
+  $("#f-monthly-price").value = state.subscriptionSettings.monthly_price;
+  $("#f-yearly-price").value = state.subscriptionSettings.yearly_price;
+  renderDiscountCodesList();
+  renderSubscribeRequestsList();
+  refreshAdminSubscriptionsBadge();
+}
+
+// ---- حفظ أسعار الاشتراك ----
+$("#btn-save-sub-prices").addEventListener("click", async () => {
+  const monthly = Number($("#f-monthly-price").value);
+  const yearly = Number($("#f-yearly-price").value);
+  if (!monthly || !yearly || monthly <= 0 || yearly <= 0) { toast("أدخل أسعارًا صحيحة أكبر من صفر", "bad"); return; }
+
+  try {
+    await SB.update("subscription_settings", "id=eq.1", { monthly_price: monthly, yearly_price: yearly, updated_at: new Date().toISOString() });
+    state.subscriptionSettings = { monthly_price: monthly, yearly_price: yearly };
+    toast("تم حفظ الأسعار", "ok");
+  } catch (err) {
+    console.error(err);
+    toast(`تعذر حفظ الأسعار: ${readableSupabaseError(err)}`, "bad");
+  }
+});
+
+// ---- أكواد الخصم ----
+function renderDiscountCodesList() {
+  $("#discount-codes-count-label").textContent = `${state.discountCodes.length} كود`;
+  const host = $("#discount-codes-list");
+  if (!state.discountCodes.length) { host.innerHTML = `<p style="color:var(--ink-soft);font-size:13px;">لا توجد أكواد خصم بعد.</p>`; return; }
+
+  host.innerHTML = state.discountCodes.map(c => `
+    <div class="checkbox-row" style="justify-content:space-between;padding:10px 0;border-bottom:1px solid var(--line);">
+      <div>
+        <b style="font-family:var(--font-mono);">${escapeHtml(c.code)}</b>
+        <span style="color:var(--ink-soft);font-size:12.5px;margin-inline-start:8px;">
+          ${c.discount_type === "percent" ? `خصم ${c.discount_value}%` : `خصم ${Number(c.discount_value).toLocaleString("en-US")} د.ع`}
+        </span>
+        <span class="badge ${c.active ? "ok" : "bad"}" style="margin-inline-start:8px;">${c.active ? "مفعّل" : "معطّل"}</span>
+      </div>
+      <div style="display:flex;gap:6px;">
+        <button class="btn btn-outline btn-sm" data-toggle-discount="${escapeHtml(c.code)}" data-active="${c.active}" style="width:auto;padding:6px 12px;">${c.active ? "تعطيل" : "تفعيل"}</button>
+        <button class="btn btn-bad btn-sm" data-delete-discount="${escapeHtml(c.code)}" style="width:auto;padding:6px 12px;">حذف</button>
+      </div>
+    </div>`).join("");
+}
+
+$("#btn-add-discount-code").addEventListener("click", async () => {
+  const code = $("#f-discount-code").value.trim().toUpperCase();
+  const discount_type = $("#f-discount-type").value;
+  const discount_value = Number($("#f-discount-value").value);
+
+  if (!code) { toast("أدخل الكود", "bad"); return; }
+  if (!discount_value || discount_value <= 0) { toast("أدخل قيمة خصم صحيحة", "bad"); return; }
+
+  try {
+    await SB.insert("discount_codes", { code, discount_type, discount_value, active: true });
+    state.discountCodes.unshift({ code, discount_type, discount_value, active: true, created_at: new Date().toISOString() });
+    renderDiscountCodesList();
+    $("#f-discount-code").value = "";
+    $("#f-discount-value").value = "";
+    toast("تمت إضافة الكود", "ok");
+  } catch (err) {
+    console.error(err);
+    toast(`تعذر إضافة الكود: ${readableSupabaseError(err)}`, "bad");
+  }
+});
+
+$("#discount-codes-list").addEventListener("click", async (e) => {
+  const toggleCode = e.target.dataset.toggleDiscount;
+  const deleteCode = e.target.dataset.deleteDiscount;
+
+  if (toggleCode) {
+    const newActive = e.target.dataset.active !== "true";
+    try {
+      await SB.update("discount_codes", `code=eq.${encodeURIComponent(toggleCode)}`, { active: newActive });
+      const row = state.discountCodes.find(c => c.code === toggleCode);
+      if (row) row.active = newActive;
+      renderDiscountCodesList();
+    } catch (err) {
+      console.error(err);
+      toast("تعذر تحديث الكود", "bad");
+    }
+  }
+
+  if (deleteCode) {
+    if (!confirm(`حذف كود الخصم "${deleteCode}"؟`)) return;
+    try {
+      await SB.remove("discount_codes", `code=eq.${encodeURIComponent(deleteCode)}`);
+      state.discountCodes = state.discountCodes.filter(c => c.code !== deleteCode);
+      renderDiscountCodesList();
+      toast("تم الحذف", "ok");
+    } catch (err) {
+      console.error(err);
+      toast("تعذر حذف الكود", "bad");
+    }
+  }
+});
+
+// ---- طلبات الاشتراك ----
+$all("#subscribe-filter-tabs .tab-btn").forEach(b => b.addEventListener("click", () => {
+  $all("#subscribe-filter-tabs .tab-btn").forEach(x => x.classList.remove("active"));
+  b.classList.add("active");
+  state.subscribeFilter = b.dataset.status;
+  renderSubscribeRequestsList();
+}));
+
+function renderSubscribeRequestsList() {
+  const filtered = state.subscribeFilter === "all"
+    ? state.subscribeRequests
+    : state.subscribeRequests.filter(r => r.status === state.subscribeFilter);
+
+  $("#subscribe-requests-count-label").textContent = `${filtered.length} طلب`;
+  const host = $("#subscribe-requests-list");
+
+  if (!filtered.length) { host.innerHTML = `<p style="color:var(--ink-soft);font-size:13px;">لا توجد طلبات هنا حاليًا.</p>`; return; }
+
+  host.innerHTML = filtered.map(r => `
+    <div class="panel" style="margin-bottom:10px;border:1px solid var(--line);">
+      <div style="display:flex;justify-content:space-between;align-items:flex-start;flex-wrap:wrap;gap:10px;">
+        <div>
+          <b>${escapeHtml(r.full_name)}</b> — <span style="font-family:var(--font-mono);">${escapeHtml(r.phone)}</span>
+          <div style="color:var(--ink-soft);font-size:12.5px;margin-top:4px;">
+            ${escapeHtml(r.governorate)} - ${escapeHtml(r.area)} · ${r.subscription_type === "year" ? "سنوي" : "شهري"} ·
+            ${Number(r.price).toLocaleString("en-US")} د.ع
+            ${r.discount_code ? ` · كود: ${escapeHtml(r.discount_code)}` : ""}
+            · ${new Date(r.created_at).toLocaleString("ar-IQ")}
+          </div>
+        </div>
+        <div style="display:flex;align-items:center;gap:8px;">
+          <span class="badge ${r.status === "paid" ? "ok" : r.status === "failed" ? "bad" : "wait"}">${r.status === "paid" ? "مفعّل" : r.status === "failed" ? "مرفوض" : "قيد الانتظار"}</span>
+          ${r.status === "pending" ? `
+            <button class="btn btn-primary btn-sm" data-activate-sub="${r.id}" style="width:auto;padding:7px 14px;">تفعيل</button>
+            <button class="btn btn-bad btn-sm" data-reject-sub="${r.id}" style="width:auto;padding:7px 14px;">رفض</button>
+          ` : ""}
+        </div>
+      </div>
+    </div>`).join("");
+}
+
+$("#subscribe-requests-list").addEventListener("click", async (e) => {
+  const activateId = e.target.dataset.activateSub;
+  const rejectId = e.target.dataset.rejectSub;
+
+  if (activateId) {
+    const req = state.subscribeRequests.find(r => r.id === activateId);
+    if (!req) return;
+    if (!confirm(`تأكيد استلام الدفعة وتفعيل اشتراك "${req.full_name}"؟`)) return;
+    try {
+      // تحديث status إلى paid يشغّل تلقائيًا trigger بقاعدة البيانات يحدّث
+      // جدول stores (plan + subscribed_at)، والذي بدوره يحسب expires_at
+      // ويفعّل is_active تلقائيًا (راجع sql/subscriptions_billing.sql)
+      await SB.update("subscribe", `id=eq.${activateId}`, { status: "paid", reviewed_at: new Date().toISOString() });
+      req.status = "paid";
+      const store = state.stores.find(s => s.phone === req.phone);
+      if (store) { store.plan = req.subscription_type; store.is_active = true; }
+      renderSubscribeRequestsList();
+      renderStoresGrid();
+      toast("تم تفعيل الاشتراك", "ok");
+    } catch (err) {
+      console.error(err);
+      toast(`تعذر التفعيل: ${readableSupabaseError(err)}`, "bad");
+    }
+  }
+
+  if (rejectId) {
+    if (!confirm("تأكيد رفض هذا الطلب؟")) return;
+    try {
+      await SB.update("subscribe", `id=eq.${rejectId}`, { status: "failed", reviewed_at: new Date().toISOString() });
+      const req = state.subscribeRequests.find(r => r.id === rejectId);
+      if (req) req.status = "failed";
+      renderSubscribeRequestsList();
+      toast("تم رفض الطلب", "ok");
+    } catch (err) {
+      console.error(err);
+      toast("تعذر رفض الطلب", "bad");
+    }
+  }
+});
+
+function refreshAdminSubscriptionsBadge() {
+  const pendingCount = state.subscribeRequests.filter(r => r.status === "pending").length;
+  const navBtn = $(`.nav-item[data-tab="a-subscriptions"]`);
+  if (navBtn) navBtn.classList.toggle("has-notif", pendingCount > 0);
+}
+
 function renderChannelsTab() {
   $("#admin-channels-list").innerHTML = ALL_CHANNELS.map(channel => {
     const g = getChannelGlobalRow(channel);
@@ -1093,8 +1290,8 @@ function updateWaRecipientCount() {
   const target = $("#wa-msg-target").value;
   const label = $("#wa-msg-recipient-count");
   if (target === "all") {
-    const count = state.subscriptions.length;
-    label.textContent = `سيتم الإرسال إلى ${count} رقم مسجّل بجدول الاشتراك`;
+    const count = state.stores.filter(s => s.phone).length;
+    label.textContent = `سيتم الإرسال إلى ${count} رقم متجر مسجّل بالمنصة`;
   } else {
     label.textContent = "";
   }
@@ -1131,9 +1328,9 @@ $("#btn-wa-msg-send").addEventListener("click", async () => {
     return;
   }
 
-  // إرسال جماعي لكل أرقام جدول الاشتراك
-  const phones = state.subscriptions.map(s => s["رقم"]).filter(Boolean);
-  if (phones.length === 0) { toast("لا يوجد أي رقم مسجّل بجدول الاشتراك حاليًا", "bad"); return; }
+  // إرسال جماعي لكل أرقام المتاجر المسجّلة بالمنصة
+  const phones = state.stores.map(s => s.phone).filter(Boolean);
+  if (phones.length === 0) { toast("لا يوجد أي رقم متجر مسجّل حاليًا", "bad"); return; }
   if (!confirm(`سيتم إرسال هذه الرسالة إلى ${phones.length} رقم. هل تريد المتابعة؟`)) return;
 
   btn.disabled = true; btn.textContent = "جارٍ البدء...";
@@ -1246,6 +1443,7 @@ async function enterStore() {
   renderProductsTab();
   renderMyComplaints();
   renderStoreAnnouncementBanner();
+  renderStoreSubscriptionBadge();
   setChannelCardStatus("wa", "disconnected", "غير متصل");
   setChannelCardStatus("messenger", "disconnected", "غير متصل");
   setChannelCardStatus("instagram", "disconnected", "غير متصل");
@@ -1294,15 +1492,17 @@ async function refreshStoreOrders() {
 async function loadStoreData() {
   const storeId = state.session.data.id;
   try {
-    const [orders, complaints, announcements, products] = await Promise.all([
+    const [orders, complaints, announcements, products, subSettingsRows] = await Promise.all([
       SB.select("orders", `store_id=eq.${storeId}&select=*&order=created_at.desc`),
       SB.select("complaints", `store_id=eq.${storeId}&select=*&order=created_at.desc`),
       SB.select("announcements", `store_id=eq.${storeId}&select=*&order=created_at.desc`),
       SB.select("products", `store_id=eq.${storeId}&select=*&order=created_at.desc`),
+      SB.select("subscription_settings", "id=eq.1&select=*"),
     ]);
     state.orders = orders;
     state.complaints = complaints;
     state.products = products;
+    state.subscriptionSettings = (subSettingsRows && subSettingsRows[0]) || { monthly_price: 15000, yearly_price: 170000 };
 
     // نجيب أيضا الإعلانات العامة (store_id فاضي)
     const generalAnn = await SB.select("announcements", "store_id=is.null&select=*&order=created_at.desc&limit=5");
@@ -1332,6 +1532,31 @@ function renderStoreAnnouncementBanner() {
       <b style="display:block;margin-bottom:4px;">📣 ${escapeHtml(latest.title)}</b>
       <span style="font-size:13.5px;color:var(--ink-soft);">${escapeHtml(latest.message)}</span>
     </div>`;
+}
+
+// ---------------------------------------------------------
+// تبويب "الاشتراك" (لوحة التاجر) — يظهر بطاقة ملوّنة حسب نوع الخطة الحالية
+// (مجاني / شهري / سنوي) مع تاريخ البدء والانتهاء والسعر، من صف المتجر نفسه
+// ---------------------------------------------------------
+function renderStoreSubscriptionBadge() {
+  const s = state.session.data;
+  ["free", "month", "year"].forEach(p => $(`#sub-badge-${p}`).classList.add("hidden"));
+
+  const plan = s.plan || "free";
+  const datesHtml = `تاريخ البدء: ${s.subscribed_at || "—"}<br>ينتهي في: ${s.expires_at || "—"}`;
+
+  if (plan === "free") {
+    $("#sub-badge-dates-free").innerHTML = datesHtml;
+    $("#sub-badge-free").classList.remove("hidden");
+  } else if (plan === "month") {
+    $("#sub-badge-price-month").textContent = `${Number(state.subscriptionSettings?.monthly_price || 0).toLocaleString("en-US")} د.ع`;
+    $("#sub-badge-dates-month").innerHTML = datesHtml;
+    $("#sub-badge-month").classList.remove("hidden");
+  } else if (plan === "year") {
+    $("#sub-badge-price-year").textContent = `${Number(state.subscriptionSettings?.yearly_price || 0).toLocaleString("en-US")} د.ع`;
+    $("#sub-badge-dates-year").innerHTML = datesHtml;
+    $("#sub-badge-year").classList.remove("hidden");
+  }
 }
 
 // ---------------------------------------------------------
