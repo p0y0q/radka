@@ -5,6 +5,19 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1" />
 <title>لوحة تحكم متاجر واتساب</title>
 <link rel="stylesheet" href="assets/style.css" />
+<style>
+  .sub-plan-badge {
+    border-radius: var(--radius-m, 14px); padding: 26px 20px; text-align: center; color: #fff;
+    max-width: 320px; box-shadow: 0 8px 22px rgba(0,0,0,.12);
+  }
+  .sub-badge-free  { background: linear-gradient(135deg, #6b7280, #9ca3af); }
+  .sub-badge-month { background: linear-gradient(135deg, #1f5f4f, #2f8f76); }
+  .sub-badge-year  { background: linear-gradient(135deg, #b8860b, #f0c419); }
+  .sub-badge-icon { font-size: 30px; margin-bottom: 6px; }
+  .sub-badge-label { font-size: 20px; font-weight: 900; margin-bottom: 8px; }
+  .sub-badge-price { font-family: var(--font-mono); font-size: 16px; font-weight: 800; opacity: .95; margin-bottom: 10px; }
+  .sub-badge-dates { font-size: 12.5px; font-weight: 600; opacity: .9; line-height: 1.8; }
+</style>
 </head>
 <body>
 
@@ -73,6 +86,7 @@
 
       <button class="nav-item active" data-tab="a-overview"><span class="ic">◆</span> نظرة عامة</button>
       <button class="nav-item" data-tab="a-stores"><span class="ic">▤</span> المتاجر</button>
+      <button class="nav-item" data-tab="a-subscriptions"><span class="ic">💳</span> الاشتراكات <span class="notif-dot" id="notif-dot-a-subscriptions"></span></button>
       <button class="nav-item" data-tab="a-channels"><span class="ic">⛭</span> القنوات</button>
       <button class="nav-item" data-tab="a-wa-messages"><span class="ic">◐</span> رسائل واتساب</button>
       <button class="nav-item" data-tab="a-api"><span class="ic">◈</span> إعدادات الذكاء الاصطناعي</button>
@@ -121,6 +135,70 @@
             <input type="text" id="store-search" placeholder="بحث بالاسم أو رقم الهاتف..." style="padding:9px 13px;border-radius:8px;border:1.5px solid var(--line);font-size:13px;min-width:220px;">
           </div>
           <div class="card-grid" id="stores-grid"></div>
+        </div>
+      </section>
+
+      <!-- الاشتراكات -->
+      <section class="tab-panel hidden" id="tab-a-subscriptions">
+        <div class="topbar">
+          <div>
+            <h2>الاشتراكات</h2>
+            <div class="sub">طلبات الاشتراك المدفوعة، الأسعار، وأكواد الخصم</div>
+          </div>
+        </div>
+
+        <div class="panel">
+          <div class="panel-head">
+            <div><h3>أسعار الاشتراك</h3><div class="sub">تُعرض هذه الأسعار مباشرة بصفحة الاشتراك</div></div>
+          </div>
+          <div class="form-grid" style="grid-template-columns:1fr 1fr;gap:14px;">
+            <div class="field">
+              <label>السعر الشهري (د.ع)</label>
+              <input type="number" id="f-monthly-price" min="0" step="1000" />
+            </div>
+            <div class="field">
+              <label>السعر السنوي (د.ع)</label>
+              <input type="number" id="f-yearly-price" min="0" step="1000" />
+            </div>
+          </div>
+          <button class="btn btn-primary btn-sm" id="btn-save-sub-prices" style="width:auto;">حفظ الأسعار</button>
+        </div>
+
+        <div class="panel">
+          <div class="panel-head">
+            <div><h3>أكواد الخصم</h3><div class="sub" id="discount-codes-count-label">0 كود</div></div>
+          </div>
+          <div class="form-grid" style="grid-template-columns:2fr 1fr 1fr auto;gap:10px;align-items:end;margin-bottom:16px;">
+            <div class="field" style="margin:0;">
+              <label>الكود</label>
+              <input type="text" id="f-discount-code" placeholder="SAVE10" style="text-transform:uppercase;" />
+            </div>
+            <div class="field" style="margin:0;">
+              <label>نوع الخصم</label>
+              <select id="f-discount-type">
+                <option value="percent">نسبة %</option>
+                <option value="fixed">مبلغ ثابت (د.ع)</option>
+              </select>
+            </div>
+            <div class="field" style="margin:0;">
+              <label>القيمة</label>
+              <input type="number" id="f-discount-value" min="0" step="1" />
+            </div>
+            <button class="btn btn-primary btn-sm" id="btn-add-discount-code">إضافة</button>
+          </div>
+          <div id="discount-codes-list"></div>
+        </div>
+
+        <div class="panel">
+          <div class="panel-head">
+            <div><h3>طلبات الاشتراك</h3><div class="sub" id="subscribe-requests-count-label">0 طلب</div></div>
+            <div class="tabs" id="subscribe-filter-tabs">
+              <button class="tab-btn active" data-status="pending">قيد الانتظار</button>
+              <button class="tab-btn" data-status="paid">مفعّلة</button>
+              <button class="tab-btn" data-status="all">الكل</button>
+            </div>
+          </div>
+          <div id="subscribe-requests-list"></div>
         </div>
       </section>
 
@@ -375,6 +453,7 @@
       <button class="nav-item" data-tab="s-ai"><span class="ic">✦</span> إعدادات الذكاء الاصطناعي</button>
       <button class="nav-item" data-tab="s-print"><span class="ic">⎙</span> الطباعة</button>
       <button class="nav-item" data-tab="s-complaint"><span class="ic">✉</span> تقديم شكوى</button>
+      <button class="nav-item" data-tab="s-subscription"><span class="ic">💳</span> الاشتراك</button>
       <button class="nav-item" data-tab="s-settings"><span class="ic">◈</span> إعدادات الحساب</button>
 
       <div class="sidebar-foot">
@@ -676,6 +755,36 @@
         <div class="panel">
           <div class="panel-head"><h3>شكاويّ السابقة</h3></div>
           <div id="my-complaints-list"></div>
+        </div>
+      </section>
+
+      <!-- الاشتراك -->
+      <section class="tab-panel hidden" id="tab-s-subscription">
+        <div class="topbar">
+          <div>
+            <h2>الاشتراك</h2>
+            <div class="sub">حالة خطتك الحالية بالمنصة</div>
+          </div>
+        </div>
+        <div class="panel">
+          <div id="sub-badge-free" class="sub-plan-badge sub-badge-free hidden">
+            <div class="sub-badge-icon">🎁</div>
+            <div class="sub-badge-label">مجاني</div>
+            <div class="sub-badge-dates" id="sub-badge-dates-free"></div>
+          </div>
+          <div id="sub-badge-month" class="sub-plan-badge sub-badge-month hidden">
+            <div class="sub-badge-icon">📅</div>
+            <div class="sub-badge-label">شهري</div>
+            <div class="sub-badge-price" id="sub-badge-price-month"></div>
+            <div class="sub-badge-dates" id="sub-badge-dates-month"></div>
+          </div>
+          <div id="sub-badge-year" class="sub-plan-badge sub-badge-year hidden">
+            <div class="sub-badge-icon">⭐</div>
+            <div class="sub-badge-label">سنوي</div>
+            <div class="sub-badge-price" id="sub-badge-price-year"></div>
+            <div class="sub-badge-dates" id="sub-badge-dates-year"></div>
+          </div>
+          <a href="subscribe.html" target="_blank" rel="noopener" class="btn btn-primary btn-sm" style="width:auto;margin-top:16px;">ترقية / تجديد الاشتراك</a>
         </div>
       </section>
 
