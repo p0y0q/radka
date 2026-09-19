@@ -3,1223 +3,344 @@
 <head>
 <meta charset="UTF-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1" />
-<title>لوحة تحكم متاجر واتساب</title>
-<link rel="stylesheet" href="assets/style.css" />
+<title>Radka — دكانك الرقمي على واتساب وكل القنوات</title>
+<meta name="description" content="ردّ فوري بالذكاء الاصطناعي على زبائنك عبر واتساب وماسنجر وانستغرام وتيليجرام وتيك توك، وأدر طلبات متجرك كلها من لوحة واحدة." />
 <style>
-  .sub-plan-badge {
-    border-radius: var(--radius-m, 14px); padding: 26px 20px; text-align: center; color: #fff;
-    max-width: 320px; box-shadow: 0 8px 22px rgba(0,0,0,.12);
+  :root {
+    --ink: #12241f;
+    --ink-soft: #3f564e;
+    --paper: #f6f4ee;
+    --paper-raised: #ffffff;
+    --line: #d9d3c4;
+    --palm: #1f5f4f;
+    --palm-deep: #123c32;
+    --palm-tint: #e4efe9;
+    --gold: #c98a3a;
+    --gold-deep: #96601f;
+    --gold-tint: #f7ecd9;
+    --ok: #2f7a4f;
+    --font: -apple-system, BlinkMacSystemFont, "Segoe UI", Tahoma, Arial, sans-serif;
+    --font-mono: "Courier New", monospace;
   }
-  .sub-badge-free  { background: linear-gradient(135deg, #6b7280, #9ca3af); }
-  .sub-badge-month { background: linear-gradient(135deg, #1f5f4f, #2f8f76); }
-  .sub-badge-year  { background: linear-gradient(135deg, #b8860b, #f0c419); }
-  .sub-badge-icon { font-size: 30px; margin-bottom: 6px; }
-  .sub-badge-label { font-size: 20px; font-weight: 900; margin-bottom: 8px; }
-  .sub-badge-price { font-family: var(--font-mono); font-size: 16px; font-weight: 800; opacity: .95; margin-bottom: 10px; }
-  .sub-badge-dates { font-size: 12.5px; font-weight: 600; opacity: .9; line-height: 1.8; }
+  * { box-sizing: border-box; }
+  html { scroll-behavior: smooth; }
+  body {
+    margin: 0;
+    background: var(--paper);
+    color: var(--ink);
+    font-family: var(--font);
+    line-height: 1.7;
+    font-size: 15.5px;
+  }
+  a { color: inherit; }
+  img { max-width: 100%; display: block; }
+  .wrap { max-width: 1080px; margin: 0 auto; padding: 0 22px; }
+
+  /* ===== خلفية زخرفية هادئة (نخيل مبسّط بخطوط) ===== */
+  .palm-mark {
+    position: absolute; inset: 0; overflow: hidden; pointer-events: none;
+    opacity: .06;
+  }
+  .palm-mark svg { position: absolute; top: -60px; left: -80px; width: 420px; height: 420px; }
+
+  /* ===== نافبار ===== */
+  .nav {
+    position: sticky; top: 0; z-index: 40;
+    background: rgba(246,244,238,.92); backdrop-filter: blur(6px);
+    border-bottom: 1px solid var(--line);
+  }
+  .nav-inner { display: flex; align-items: center; justify-content: space-between; padding: 14px 22px; max-width: 1080px; margin: 0 auto; gap: 12px; }
+  .brand { display: flex; align-items: center; gap: 10px; text-decoration: none; }
+  .brand .glyph {
+    width: 38px; height: 38px; border-radius: 10px; background: var(--palm-deep); color: var(--gold-tint);
+    display: flex; align-items: center; justify-content: center; font-weight: 800; font-size: 15px; flex-shrink: 0;
+  }
+  .brand b { font-size: 16px; color: var(--palm-deep); }
+  .nav-actions { display: flex; align-items: center; gap: 10px; }
+
+  .btn {
+    display: inline-flex; align-items: center; justify-content: center; gap: 6px;
+    padding: 11px 20px; border-radius: 10px; font-weight: 800; font-size: 14px;
+    text-decoration: none; border: 1.5px solid transparent; cursor: pointer; transition: transform .12s, box-shadow .12s;
+  }
+  .btn-gold { background: var(--gold); color: #2a1c08; box-shadow: 0 4px 14px rgba(201,138,58,.35); }
+  .btn-gold:hover { transform: translateY(-1px); box-shadow: 0 6px 18px rgba(201,138,58,.45); }
+  .btn-outline { background: transparent; color: var(--palm-deep); border-color: var(--palm-deep); }
+  .btn-outline:hover { background: var(--palm-tint); }
+  .btn-ghost { background: transparent; color: var(--palm-deep); border-color: var(--line); }
+  .btn-ghost:hover { border-color: var(--palm-deep); }
+  .btn-sm { padding: 9px 16px; font-size: 13px; }
+
+  /* ===== الهيرو ===== */
+  .hero { position: relative; overflow: hidden; padding: 60px 0 30px; }
+  .hero-grid { display: grid; grid-template-columns: 1.15fr 1fr; gap: 40px; align-items: center; }
+  .eyebrow-none { } /* لا نستخدم eyebrow — العنوان يتكلم عن نفسه */
+  .hero h1 {
+    font-size: clamp(30px, 4.4vw, 46px); line-height: 1.28; margin: 0 0 18px; color: var(--palm-deep);
+    letter-spacing: -.01em;
+  }
+  .hero p.lead { font-size: 17px; color: var(--ink-soft); margin: 0 0 30px; max-width: 46ch; }
+  .hero-cta { display: flex; flex-wrap: wrap; gap: 12px; margin-bottom: 26px; }
+  .hero-note { font-size: 13px; color: var(--ink-soft); display: flex; align-items: center; gap: 6px; }
+  .hero-note::before { content: "✓"; color: var(--ok); font-weight: 900; }
+
+  /* ===== موك-أب المحادثة (اللحظة المميزة الوحيدة بالصفحة) ===== */
+  .phone-mock {
+    background: var(--paper-raised); border: 1px solid var(--line); border-radius: 22px;
+    padding: 18px; box-shadow: 0 20px 50px rgba(18,36,31,.14); max-width: 340px; margin-inline-start: auto;
+  }
+  .phone-head { display: flex; align-items: center; gap: 10px; padding-bottom: 12px; border-bottom: 1px solid var(--line); margin-bottom: 14px; }
+  .phone-head .av { width: 34px; height: 34px; border-radius: 50%; background: var(--palm-tint); color: var(--palm-deep); display: flex; align-items: center; justify-content: center; font-weight: 800; font-size: 13px; }
+  .phone-head b { font-size: 13.5px; display: block; }
+  .phone-head span { font-size: 11px; color: var(--ok); }
+  .bubble {
+    max-width: 82%; padding: 10px 13px; border-radius: 14px; font-size: 13.5px; margin-bottom: 10px;
+    opacity: 0; transform: translateY(8px); animation: bubbleIn .5s ease forwards;
+  }
+  .bubble.in { background: var(--palm-tint); color: var(--ink); border-bottom-right-radius: 4px; margin-inline-end: auto; animation-delay: .3s; }
+  .bubble.typing { background: var(--paper); border: 1px solid var(--line); display: inline-flex; gap: 4px; padding: 12px 14px; border-bottom-left-radius: 4px; animation-delay: 1.3s; }
+  .bubble.typing span { width: 6px; height: 6px; border-radius: 50%; background: var(--ink-soft); animation: dot 1s infinite; }
+  .bubble.typing span:nth-child(2) { animation-delay: .15s; }
+  .bubble.typing span:nth-child(3) { animation-delay: .3s; }
+  .bubble.out { background: var(--gold); color: #2a1c08; border-bottom-left-radius: 4px; animation-delay: 2.3s; font-weight: 600; }
+  @keyframes bubbleIn { to { opacity: 1; transform: translateY(0); } }
+  @keyframes dot { 0%, 60%, 100% { opacity: .3; } 30% { opacity: 1; } }
+  @media (prefers-reduced-motion: reduce) {
+    .bubble { animation: none; opacity: 1; transform: none; }
+  }
+
+  /* ===== شريط القنوات ===== */
+  .channels-strip { padding: 26px 0; border-top: 1px solid var(--line); border-bottom: 1px solid var(--line); }
+  .channels-row { display: flex; justify-content: center; align-items: center; gap: 34px; flex-wrap: wrap; color: var(--ink-soft); font-size: 13.5px; font-weight: 700; }
+  .channels-row span { display: flex; align-items: center; gap: 8px; }
+  .channels-row .dot { width: 8px; height: 8px; border-radius: 50%; background: var(--gold); }
+
+  /* ===== قسم عام ===== */
+  section { padding: 66px 0; }
+  .section-head { max-width: 54ch; margin-bottom: 40px; }
+  .section-head h2 { font-size: clamp(24px, 3vw, 32px); color: var(--palm-deep); margin: 0 0 10px; }
+  .section-head p { color: var(--ink-soft); margin: 0; font-size: 15px; }
+
+  /* ===== كيف يعمل (خطوات فعلية) ===== */
+  .steps { display: grid; grid-template-columns: repeat(3, 1fr); gap: 26px; counter-reset: step; }
+  .step { position: relative; padding-inline-start: 46px; }
+  .step::before {
+    counter-increment: step; content: counter(step);
+    position: absolute; right: 0; top: 0; width: 34px; height: 34px; border-radius: 9px;
+    background: var(--palm-deep); color: var(--gold-tint); font-weight: 800; font-size: 14.5px;
+    display: flex; align-items: center; justify-content: center;
+  }
+  .step h3 { font-size: 15.5px; margin: 2px 0 8px; color: var(--ink); }
+  .step p { font-size: 13.8px; color: var(--ink-soft); margin: 0; }
+
+  /* ===== المزايا ===== */
+  .features { background: var(--paper-raised); }
+  .feat-grid { display: grid; grid-template-columns: repeat(2, 1fr); gap: 1px; background: var(--line); border: 1px solid var(--line); border-radius: 16px; overflow: hidden; }
+  .feat { background: var(--paper-raised); padding: 26px 24px; }
+  .feat h3 { font-size: 15px; margin: 0 0 8px; color: var(--palm-deep); }
+  .feat p { font-size: 13.8px; color: var(--ink-soft); margin: 0; }
+
+  /* ===== CTA وسط الصفحة ===== */
+  .mid-cta { background: var(--palm-deep); border-radius: 20px; padding: 46px 36px; text-align: center; color: #eef4f1; }
+  .mid-cta h2 { font-size: clamp(22px, 3vw, 28px); margin: 0 0 10px; }
+  .mid-cta p { color: rgba(238,244,241,.78); margin: 0 0 24px; }
+  .mid-cta .hero-cta { justify-content: center; }
+
+  /* ===== من نحن (مختصر) ===== */
+  .about-box { display: grid; grid-template-columns: 1fr 1fr; gap: 40px; align-items: center; }
+  .about-box blockquote { margin: 0; font-size: 18px; color: var(--palm-deep); line-height: 1.7; border-inline-start: 3px solid var(--gold); padding-inline-start: 18px; }
+  .about-box .about-text p { color: var(--ink-soft); font-size: 14.5px; }
+
+  /* ===== التواصل ===== */
+  .contact-strip { background: var(--gold-tint); border-top: 1px solid var(--line); border-bottom: 1px solid var(--line); }
+  .contact-row { display: flex; flex-wrap: wrap; justify-content: space-between; align-items: center; gap: 18px; padding: 30px 0; }
+  .contact-items { display: flex; flex-wrap: wrap; gap: 26px; }
+  .contact-item { display: flex; align-items: center; gap: 10px; font-size: 14.5px; font-weight: 700; color: var(--gold-deep); }
+  .contact-item .ic { width: 34px; height: 34px; border-radius: 9px; background: var(--paper-raised); display: flex; align-items: center; justify-content: center; font-size: 15px; }
+
+  /* ===== فوتر ===== */
+  footer { background: var(--palm-deep); color: rgba(238,244,241,.85); padding: 40px 0 26px; }
+  .foot-top { display: flex; flex-wrap: wrap; justify-content: space-between; gap: 30px; padding-bottom: 26px; border-bottom: 1px solid rgba(238,244,241,.15); margin-bottom: 20px; }
+  .foot-brand .brand .glyph { background: var(--gold); color: #2a1c08; }
+  .foot-brand .brand b { color: #eef4f1; }
+  .foot-brand p { color: rgba(238,244,241,.65); font-size: 13px; max-width: 34ch; margin: 10px 0 0; }
+  .foot-links { display: flex; flex-wrap: wrap; gap: 12px 26px; }
+  .foot-links a { font-size: 13.5px; text-decoration: none; color: rgba(238,244,241,.8); }
+  .foot-links a:hover { color: #fff; text-decoration: underline; }
+  .foot-bottom { font-size: 12.5px; color: rgba(238,244,241,.55); text-align: center; }
+
+  /* ===== استجابة الجوال ===== */
+  @media (max-width: 860px) {
+    .hero-grid, .about-box { grid-template-columns: 1fr; }
+    .phone-mock { margin-inline: auto; margin-top: 30px; }
+    .steps, .feat-grid { grid-template-columns: 1fr; }
+    .nav-actions .btn-ghost { display: none; }
+  }
 </style>
 </head>
 <body>
 
-<!-- =========================================================
-     شاشة تسجيل الدخول
-========================================================= -->
-<div id="screen-login" class="screen active">
-  <div class="login-wrap">
-    <div class="login-card">
-      <div class="brand-mark">
-        <div class="glyph">وب</div>
-        <div class="text">
-          <h1>لوحة متاجر واتساب</h1>
-          <p>تسجيل الدخول للمتابعة</p>
-        </div>
-      </div>
-
-      <div class="login-alert" id="login-alert"></div>
-
-      <form id="login-form">
-        <div class="field">
-          <label for="login-phone">رقم الهاتف</label>
-          <input type="tel" id="login-phone" placeholder="07xxxxxxxxx" inputmode="numeric" autocomplete="off" />
-          <div class="field-error" id="phone-error">رقم الهاتف يجب أن يبدأ بـ 07 ويتكون من 11 رقم بالضبط.</div>
-        </div>
-        <div class="field">
-          <label for="login-password">كلمة المرور</label>
-          <input type="password" id="login-password" placeholder="••••••••" autocomplete="off" />
-        </div>
-        <button type="submit" class="btn btn-primary" id="login-submit">دخول</button>
-      </form>
-
-      <div class="login-foot">
-        جميع الحسابات مسجّلة مسبقًا من قِبل المشرف
-        <div style="margin-top:8px;">
-          لا تمتلك حساب؟
-          <a href="register.html" style="color:var(--palm-deep);text-decoration:underline;font-weight:800;">تسجيل جديد</a>
-        </div>
-      </div>
+<nav class="nav">
+  <div class="nav-inner">
+    <a href="#" class="brand"><span class="glyph">وب</span> <b>Radka</b></a>
+    <div class="nav-actions">
+      <a href="about.html" class="btn btn-ghost btn-sm">من نحن</a>
+      <a href="app.html" class="btn btn-outline btn-sm">تسجيل دخول</a>
+      <a href="register.html" class="btn btn-gold btn-sm">جرّب مجانًا</a>
     </div>
   </div>
-</div>
-
-<!-- =========================================================
-     شاشة لوحة المشرف (الأدمن)
-========================================================= -->
-<div id="screen-admin" class="screen">
-  <div class="mobile-topbar">
-    <div style="display:flex;align-items:center;gap:10px;">
-      <div class="glyph">وب</div>
-      <b>لوحة المشرف</b>
-    </div>
-    <button id="admin-menu-toggle">☰</button>
-  </div>
-  <div class="sidebar-scrim" id="admin-scrim"></div>
-
-  <div class="app-shell">
-    <aside class="sidebar" id="admin-sidebar">
-      <div class="brand-mark">
-        <div class="glyph">وب</div>
-        <div class="text">
-          <h1>لوحة المشرف</h1>
-          <p>إدارة كاملة للنظام</p>
-        </div>
-      </div>
-
-      <button class="nav-item active" data-tab="a-overview"><span class="ic">◆</span> نظرة عامة</button>
-      <button class="nav-item" data-tab="a-stores"><span class="ic">▤</span> المتاجر</button>
-      <button class="nav-item" data-tab="a-subscriptions"><span class="ic">💳</span> الاشتراكات <span class="notif-dot" id="notif-dot-a-subscriptions"></span></button>
-      <button class="nav-item" data-tab="a-channels"><span class="ic">⛭</span> القنوات</button>
-      <button class="nav-item" data-tab="a-wa-messages"><span class="ic">◐</span> رسائل واتساب</button>
-      <button class="nav-item" data-tab="a-api"><span class="ic">◈</span> إعدادات الذكاء الاصطناعي</button>
-      <button class="nav-item" data-tab="a-announcements"><span class="ic">◉</span> الإعلانات</button>
-      <button class="nav-item" data-tab="a-complaints"><span class="ic">✉</span> الشكاوى <span class="notif-dot" id="notif-dot-a-complaints"></span></button>
-
-      <div class="sidebar-foot">
-        <div class="who"><b id="admin-name-label">المشرف العام</b>مشرف النظام</div>
-        <button class="btn btn-ghost btn-sm" id="admin-logout" style="width:100%;justify-content:flex-start;color:rgba(238,244,241,0.7)">⇦ تسجيل الخروج</button>
-      </div>
-    </aside>
-
-    <main class="main">
-      <!-- نظرة عامة -->
-      <section class="tab-panel" id="tab-a-overview">
-        <div class="topbar">
-          <div>
-            <h2>نظرة عامة</h2>
-            <div class="sub">ملخص شامل عن المتاجر والطلبات في النظام</div>
-          </div>
-        </div>
-        <div class="stat-grid" id="admin-stats"></div>
-        <div class="panel">
-          <div class="panel-head">
-            <div>
-              <h3>أحدث المتاجر</h3>
-              <div class="sub">آخر المتاجر المضافة إلى النظام</div>
-            </div>
-            <button class="btn btn-outline btn-sm" data-goto="a-stores">عرض الكل</button>
-          </div>
-          <div class="card-grid" id="admin-recent-stores"></div>
-        </div>
-      </section>
-
-      <!-- المتاجر -->
-      <section class="tab-panel hidden" id="tab-a-stores">
-        <div class="topbar">
-          <div>
-            <h2>إدارة المتاجر</h2>
-            <div class="sub">التعديل، تمديد/إلغاء الاشتراك، الزبائن، القنوات المتصلة — التسجيل يتم ذاتيًا عبر صفحة إنشاء حساب فقط</div>
-          </div>
-        </div>
-        <div class="panel">
-          <div class="panel-head">
-            <div><h3>كل المتاجر</h3><div class="sub" id="stores-count-label">0 متجر</div></div>
-            <input type="text" id="store-search" placeholder="بحث بالاسم أو رقم الهاتف..." style="padding:9px 13px;border-radius:8px;border:1.5px solid var(--line);font-size:13px;min-width:220px;">
-          </div>
-          <div class="card-grid" id="stores-grid"></div>
-        </div>
-      </section>
-
-      <!-- الاشتراكات -->
-      <section class="tab-panel hidden" id="tab-a-subscriptions">
-        <div class="topbar">
-          <div>
-            <h2>الاشتراكات</h2>
-            <div class="sub">طلبات الاشتراك المدفوعة، الأسعار، وأكواد الخصم</div>
-          </div>
-        </div>
-
-        <div class="panel">
-          <div class="panel-head">
-            <div><h3>أسعار الاشتراك</h3><div class="sub">تُعرض هذه الأسعار مباشرة بصفحة الاشتراك</div></div>
-          </div>
-          <div class="form-grid" style="grid-template-columns:1fr 1fr;gap:14px;">
-            <div class="field">
-              <label>السعر الشهري (د.ع)</label>
-              <input type="number" id="f-monthly-price" min="0" step="1000" />
-            </div>
-            <div class="field">
-              <label>السعر السنوي (د.ع)</label>
-              <input type="number" id="f-yearly-price" min="0" step="1000" />
-            </div>
-          </div>
-          <button class="btn btn-primary btn-sm" id="btn-save-sub-prices" style="width:auto;">حفظ الأسعار</button>
-        </div>
-
-        <div class="panel">
-          <div class="panel-head">
-            <div><h3>طرق الدفع</h3><div class="sub">فعّل أو عطّل أي طريقة دفع بضغطة زر</div></div>
-          </div>
-
-          <div class="checkbox-row" style="justify-content:space-between;padding:10px 0;border-bottom:1px solid var(--line);">
-            <span>الدفع بالبطاقة (Visa/Mastercard)</span>
-            <label class="switch"><input type="checkbox" id="pm-card-enabled" /><span class="slider"></span></label>
-          </div>
-          <div class="checkbox-row" style="justify-content:space-between;padding:10px 0;border-bottom:1px solid var(--line);">
-            <span>التحويل المباشر (زين كاش / سوبر كي)</span>
-            <label class="switch"><input type="checkbox" id="pm-transfer-enabled" /><span class="slider"></span></label>
-          </div>
-          <div class="checkbox-row" style="justify-content:space-between;padding:10px 0;border-bottom:1px solid var(--line);">
-            <span>خيار زين كاش</span>
-            <label class="switch"><input type="checkbox" id="pm-zaincash-enabled" /><span class="slider"></span></label>
-          </div>
-          <div class="checkbox-row" style="justify-content:space-between;padding:10px 0;margin-bottom:16px;">
-            <span>خيار سوبر كي</span>
-            <label class="switch"><input type="checkbox" id="pm-superkey-enabled" /><span class="slider"></span></label>
-          </div>
-
-          <div class="form-grid" style="grid-template-columns:1fr 1fr;gap:14px;">
-            <div class="field">
-              <label>رقم محفظة زين كاش</label>
-              <input type="text" id="pm-zaincash-number" placeholder="0790xxxxxxx" />
-            </div>
-            <div class="field">
-              <label>رقم محفظة سوبر كي</label>
-              <input type="text" id="pm-superkey-number" placeholder="0790xxxxxxx" />
-            </div>
-            <div class="field">
-              <label>صورة QR — زين كاش</label>
-              <input type="file" id="pm-zaincash-qr-file" accept="image/*" />
-              <img id="pm-zaincash-qr-preview" style="max-width:100px;margin-top:8px;border:1px solid var(--line);border-radius:8px;" />
-            </div>
-            <div class="field">
-              <label>صورة QR — سوبر كي</label>
-              <input type="file" id="pm-superkey-qr-file" accept="image/*" />
-              <img id="pm-superkey-qr-preview" style="max-width:100px;margin-top:8px;border:1px solid var(--line);border-radius:8px;" />
-            </div>
-          </div>
-          <button class="btn btn-primary btn-sm" id="btn-save-payment-methods" style="width:auto;">حفظ إعدادات الدفع</button>
-        </div>
-
-        <div class="panel">
-          <div class="panel-head">
-            <div><h3>أكواد الخصم</h3><div class="sub" id="discount-codes-count-label">0 كود</div></div>
-          </div>
-          <div class="form-grid" style="grid-template-columns:2fr 1fr 1fr auto;gap:10px;align-items:end;margin-bottom:16px;">
-            <div class="field" style="margin:0;">
-              <label>الكود</label>
-              <input type="text" id="f-discount-code" placeholder="SAVE10" style="text-transform:uppercase;" />
-            </div>
-            <div class="field" style="margin:0;">
-              <label>نوع الخصم</label>
-              <select id="f-discount-type">
-                <option value="percent">نسبة %</option>
-                <option value="fixed">مبلغ ثابت (د.ع)</option>
-              </select>
-            </div>
-            <div class="field" style="margin:0;">
-              <label>القيمة</label>
-              <input type="number" id="f-discount-value" min="0" step="1" />
-            </div>
-            <button class="btn btn-primary btn-sm" id="btn-add-discount-code">إضافة</button>
-          </div>
-          <div id="discount-codes-list"></div>
-        </div>
-
-        <div class="panel">
-          <div class="panel-head">
-            <div><h3>طلبات الاشتراك</h3><div class="sub" id="subscribe-requests-count-label">0 طلب</div></div>
-            <div class="tabs" id="subscribe-filter-tabs">
-              <button class="tab-btn active" data-status="pending">قيد الانتظار</button>
-              <button class="tab-btn" data-status="paid">مفعّلة</button>
-              <button class="tab-btn" data-status="all">الكل</button>
-            </div>
-          </div>
-          <div id="subscribe-requests-list"></div>
-        </div>
-      </section>
-
-      <!-- القنوات -->
-      <section class="tab-panel hidden" id="tab-a-channels">
-        <div class="topbar">
-          <div>
-            <h2>إدارة القنوات</h2>
-            <div class="sub">تحكّم بإظهار/إخفاء أو تفعيل/إغلاق أي قناة — عامًا لكل المتاجر، أو استثناء لمتاجر محددة</div>
-          </div>
-        </div>
-        <div class="panel">
-          <div id="admin-channels-list"></div>
-        </div>
-      </section>
-
-      <!-- إعدادات API -->
-      <!-- رسائل واتساب -->
-      <section class="tab-panel hidden" id="tab-a-wa-messages">
-        <div class="topbar">
-          <div>
-            <h2>رسائل واتساب</h2>
-            <div class="sub">اربط رقمين منفصلين: واحد لرموز التحقق عند التسجيل، وواحد لإرسال رسائل مؤقتة للتجار</div>
-          </div>
-        </div>
-
-        <!-- رقم رموز التحقق (OTP) عبر Baileys مباشرة -->
-        <div class="panel">
-          <div class="panel-head"><h3>رقم رموز التحقق (تسجيل حساب جديد)</h3></div>
-          <p style="color:var(--ink-soft);font-size:12.5px;margin:-6px 0 14px;">يُستخدم لإرسال كود التحقق المكوّن من 6 أرقام لحظة إنشاء حساب تاجر جديد بصفحة التسجيل، عبر رقم واتساب مربوط مباشرة بنفس آلية ربط رقم "إرسال رسائل واتساب" بالأسفل — بدون أي خدمة سحابية وسيطة وبدون أي حصة شهرية. جلسة منفصلة تمامًا عن رقم الإرسال الجماعي، اربطه برقم مخصص لرموز التحقق فقط.</p>
-
-          <div id="otp-admin-state-disconnected">
-            <p style="color:var(--ink-soft);font-size:13.5px;margin:0 0 14px;">لا يوجد رقم مربوط حاليًا لإرسال رموز التحقق، فستفشل عملية إنشاء حساب جديد عند خطوة إرسال كود التحقق حتى تربط رقمًا. اضغط الزر أدناه لإظهار رمز QR.</p>
-            <button class="btn btn-primary btn-sm" id="btn-otp-admin-connect">ربط رقم جديد</button>
-          </div>
-
-          <div id="otp-admin-state-loading" class="hidden">
-            <p style="color:var(--ink-soft);font-size:13.5px;">جارٍ التحضير، انتظر لحظات...</p>
-          </div>
-
-          <div id="otp-admin-state-qr" class="hidden" style="text-align:center;">
-            <p style="color:var(--ink-soft);font-size:13.5px;margin-bottom:12px;">افتح واتساب على الرقم المخصص لرموز التحقق ← الأجهزة المرتبطة ← ربط جهاز ← امسح الرمز:</p>
-            <img id="otp-admin-qr-img" src="" alt="QR" style="width:220px;height:220px;border:1px solid var(--line);border-radius:var(--radius-s);padding:8px;background:#fff;" />
-            <div style="margin-top:12px;"><button class="btn btn-outline btn-sm" id="btn-otp-admin-refresh-qr">تحديث الرمز</button></div>
-          </div>
-
-          <div id="otp-admin-state-connected" class="hidden">
-            <div class="checkbox-row" style="margin-bottom:14px;">
-              <span class="badge ok">متصل</span>
-              <span id="otp-admin-connected-number" style="font-family:var(--font-mono);"></span>
-            </div>
-            <button class="btn btn-bad btn-sm" id="btn-otp-admin-disconnect">فصل الرقم</button>
-          </div>
-        </div>
-
-        <!-- حالة الربط -->
-        <div class="panel">
-          <div class="panel-head"><h3>ربط رقم الإرسال (رسائل جماعية/مخصصة)</h3></div>
-
-          <div id="wa-admin-state-disconnected">
-            <p style="color:var(--ink-soft);font-size:13.5px;margin:0 0 14px;">لا يوجد رقم مربوط حاليًا. اضغط الزر أدناه لإظهار رمز QR وربط أي رقم واتساب تختاره.</p>
-            <button class="btn btn-primary btn-sm" id="btn-wa-admin-connect">ربط رقم جديد</button>
-          </div>
-
-          <div id="wa-admin-state-loading" class="hidden">
-            <p style="color:var(--ink-soft);font-size:13.5px;">جارٍ التحضير، انتظر لحظات...</p>
-          </div>
-
-          <div id="wa-admin-state-qr" class="hidden" style="text-align:center;">
-            <p style="color:var(--ink-soft);font-size:13.5px;margin-bottom:12px;">افتح واتساب على الرقم المطلوب ربطه ← الأجهزة المرتبطة ← ربط جهاز ← امسح الرمز:</p>
-            <img id="wa-admin-qr-img" src="" alt="QR" style="width:220px;height:220px;border:1px solid var(--line);border-radius:var(--radius-s);padding:8px;background:#fff;" />
-            <div style="margin-top:12px;"><button class="btn btn-outline btn-sm" id="btn-wa-admin-refresh-qr">تحديث الرمز</button></div>
-          </div>
-
-          <div id="wa-admin-state-connected" class="hidden">
-            <div class="checkbox-row" style="margin-bottom:14px;">
-              <span class="badge ok">متصل</span>
-              <span id="wa-admin-connected-number" style="font-family:var(--font-mono);"></span>
-            </div>
-            <button class="btn btn-bad btn-sm" id="btn-wa-admin-disconnect">فصل الرقم</button>
-          </div>
-        </div>
-
-        <!-- إرسال رسالة -->
-        <div class="panel">
-          <div class="panel-head"><h3>إرسال رسالة</h3></div>
-          <div class="form-grid">
-            <div class="field" style="grid-column:1/-1;">
-              <label>الجهة المستهدفة</label>
-              <select id="wa-msg-target">
-                <option value="all">كل التجار المسجلين (جدول الاشتراك)</option>
-                <option value="custom">رقم مخصص</option>
-              </select>
-            </div>
-            <div class="field hidden" id="wa-msg-custom-phone-field">
-              <label>رقم الهاتف المخصص</label>
-              <input type="tel" id="wa-msg-custom-phone" placeholder="07xxxxxxxxx" inputmode="numeric" style="font-family:var(--font-mono);">
-            </div>
-            <div class="field" style="grid-column:1/-1;">
-              <label>نص الرسالة</label>
-              <textarea id="wa-msg-text" rows="4" placeholder="اكتب نص الرسالة هنا..."></textarea>
-            </div>
-          </div>
-          <div style="margin-top:14px;display:flex;align-items:center;gap:12px;flex-wrap:wrap;">
-            <button class="btn btn-primary btn-sm" id="btn-wa-msg-send">إرسال</button>
-            <span id="wa-msg-recipient-count" style="font-size:12.5px;color:var(--ink-soft);"></span>
-          </div>
-
-          <div id="wa-bulk-progress" class="hidden" style="margin-top:16px;">
-            <div class="sub" id="wa-bulk-progress-label">جارٍ الإرسال...</div>
-            <div style="background:var(--paper);border:1px solid var(--line);border-radius:var(--radius-s);height:10px;overflow:hidden;margin-top:6px;">
-              <div id="wa-bulk-progress-bar" style="background:var(--palm);height:100%;width:0%;transition:width .3s ease;"></div>
-            </div>
-          </div>
-        </div>
-      </section>
-
-      <section class="tab-panel hidden" id="tab-a-api">
-        <div class="topbar">
-          <div>
-            <h2>إعدادات الذكاء الاصطناعي</h2>
-            <div class="sub">مفتاح Gemini الأساسي، ومفتاح احتياطي واحد للضرورة القصوى فقط</div>
-          </div>
-        </div>
-        <div class="panel">
-          <div class="panel-head"><h3>المفتاح الأساسي (Gemini)</h3></div>
-          <div class="form-grid">
-            <div class="field" style="grid-column:1/-1;">
-              <label>مفتاح Gemini (AI Studio)</label>
-              <input type="text" id="gemini-api-key" placeholder="AQ.A******************************************" style="font-family:var(--font-mono)">
-            </div>
-            <div class="field" style="grid-column:1/-1;">
-              <label>نوع الموديل</label>
-              <input type="text" id="gemini-model" placeholder="gemini-3.6-flash" style="font-family:var(--font-mono)">
-            </div>
-          </div>
-          <div style="margin-top:14px;"><button class="btn btn-primary btn-sm" id="save-global-api">حفظ المفتاح الأساسي</button></div>
-        </div>
-
-        <div class="panel">
-          <div class="panel-head">
-            <div><h3>مفتاح احتياطي (للضرورة القصوى فقط)</h3><div class="sub">يُستخدم فقط إذا فشل المفتاح الأساسي تمامًا. يُفضّل الاكتفاء بمفتاح واحد هنا لتفادي أي تعقيد إضافي.</div></div>
-          </div>
-
-          <div class="form-grid" style="margin-bottom:14px;">
-            <div class="field">
-              <label>اسم وصفي (للتمييز فقط)</label>
-              <input type="text" id="pool-label" placeholder="مثال: احتياط للضرورة">
-            </div>
-            <div class="field">
-              <label>الموديل</label>
-              <input type="text" id="pool-model" placeholder="gemini-3.6-flash" style="font-family:var(--font-mono)">
-            </div>
-            <div class="field">
-              <label>مفتاح Gemini API</label>
-              <input type="text" id="pool-api-key" placeholder="المفتاح..." style="font-family:var(--font-mono)">
-            </div>
-          </div>
-          <div style="margin-bottom:18px;"><button class="btn btn-primary btn-sm" id="add-pool-key">+ إضافة كمفتاح احتياطي</button></div>
-
-          <div class="table-wrap">
-            <table>
-              <thead><tr><th>الاسم</th><th>الموديل</th><th>الحالة</th><th>إجراء</th></tr></thead>
-              <tbody id="ai-pool-tbody"></tbody>
-            </table>
-          </div>
-        </div>
-      </section>
-
-      <!-- الإعلانات -->
-      <section class="tab-panel hidden" id="tab-a-announcements">
-        <div class="topbar">
-          <div>
-            <h2>الإعلانات</h2>
-            <div class="sub">أرسل إعلانًا عامًا لكل المتاجر أو إعلانًا خاصًا لمتجر واحد</div>
-          </div>
-        </div>
-        <div class="panel">
-          <div class="panel-head"><h3>إعلان جديد</h3></div>
-          <div class="form-grid">
-            <div class="field">
-              <label>عنوان الإعلان</label>
-              <input type="text" id="ann-title" placeholder="مثال: صيانة مجدولة">
-            </div>
-            <div class="field">
-              <label>المتجر المستهدف</label>
-              <select id="ann-target">
-                <option value="">جميع المتاجر (عام)</option>
-              </select>
-            </div>
-            <div class="field" style="grid-column:1/-1;">
-              <label>نص الإعلان</label>
-              <textarea id="ann-message" rows="3" placeholder="اكتب نص الإعلان هنا..."></textarea>
-            </div>
-          </div>
-          <div style="margin-top:14px;"><button class="btn btn-primary btn-sm" id="send-announcement">نشر الإعلان</button></div>
-        </div>
-        <div class="panel">
-          <div class="panel-head"><h3>الإعلانات المرسلة</h3></div>
-          <div id="announcements-list"></div>
-        </div>
-      </section>
-
-      <!-- الشكاوى -->
-      <section class="tab-panel hidden" id="tab-a-complaints">
-        <div class="topbar">
-          <div>
-            <h2>شكاوى المتاجر</h2>
-            <div class="sub">الشكاوى المرسلة من أصحاب المتاجر</div>
-          </div>
-        </div>
-        <div class="panel">
-          <div class="table-wrap">
-            <table>
-              <thead><tr><th>المتجر</th><th>الموضوع</th><th>الرسالة</th><th>الحالة</th><th>التاريخ</th><th>إجراء</th></tr></thead>
-              <tbody id="complaints-tbody"></tbody>
-            </table>
-          </div>
-        </div>
-      </section>
-    </main>
-  </div>
-</div>
-
-<!-- =========================================================
-     شاشة لوحة المتجر
-========================================================= -->
-<div id="screen-store" class="screen">
-  <div class="mobile-topbar">
-    <div style="display:flex;align-items:center;gap:10px;">
-      <div class="glyph">م</div>
-      <b id="store-mobile-name">متجري</b>
-    </div>
-    <button id="store-menu-toggle">☰</button>
-  </div>
-  <div class="sidebar-scrim" id="store-scrim"></div>
-
-  <div class="app-shell">
-    <aside class="sidebar" id="store-sidebar">
-      <div class="brand-mark">
-        <div class="glyph">م</div>
-        <div class="text">
-          <h1 id="store-side-name">متجري</h1>
-          <p>لوحة تحكم المتجر</p>
-        </div>
-      </div>
-
-      <button class="nav-item active" data-tab="s-orders"><span class="ic">▤</span> الطلبات</button>
-      <button class="nav-item" data-tab="s-products"><span class="ic">◫</span> المنتجات</button>
-      <button class="nav-item" data-tab="s-announcements"><span class="ic">📣</span> الإعلانات <span class="notif-dot" id="notif-dot-s-announcements"></span></button>
-      <button class="nav-item" data-tab="s-whatsapp"><span class="ic">◉</span> ربط القنوات</button>
-      <button class="nav-item" data-tab="s-ai"><span class="ic">✦</span> إعدادات الذكاء الاصطناعي</button>
-      <button class="nav-item" data-tab="s-print"><span class="ic">⎙</span> الطباعة</button>
-      <button class="nav-item" data-tab="s-complaint"><span class="ic">✉</span> تقديم شكوى</button>
-      <button class="nav-item" data-tab="s-subscription"><span class="ic">💳</span> الاشتراك</button>
-      <button class="nav-item" data-tab="s-settings"><span class="ic">◈</span> إعدادات الحساب</button>
-
-      <div class="sidebar-foot">
-        <div class="who"><b id="store-name-label">اسم المتجر</b>صاحب المتجر</div>
-        <button class="btn btn-ghost btn-sm" id="store-logout" style="width:100%;justify-content:flex-start;color:rgba(238,244,241,0.7)">⇦ تسجيل الخروج</button>
-      </div>
-    </aside>
-
-    <main class="main">
-      <!-- الطلبات -->
-      <section class="tab-panel" id="tab-s-orders">
-        <div class="topbar">
-          <div>
-            <h2>طلبات الزبائن</h2>
-            <div class="sub">الزبائن المرتبطون برقم الواتساب الخاص بمتجرك فقط</div>
-          </div>
-        </div>
-        <div class="stat-grid" id="store-stats"></div>
-
-        <div id="store-announcement-banner"></div>
-
-        <div class="panel">
-          <div class="panel-head">
-            <div><h3>سجل الطلبات</h3></div>
-            <div class="tabs" id="orders-filter-tabs">
-              <button class="tab-btn active" data-filter="all">الكل</button>
-              <button class="tab-btn" data-filter="pending">بالانتظار</button>
-              <button class="tab-btn" data-filter="completed">منجزة</button>
-              <button class="tab-btn" data-filter="cancelled">ملغاة</button>
-            </div>
-          </div>
-          <div class="table-wrap">
-            <table>
-              <thead>
-                <tr>
-                  <th>اسم الزبون</th><th>الموقع</th><th>الرقم</th><th>الطلب</th><th>نوع الطلب</th><th>السعر</th><th>الكمية</th><th>الملاحظات</th><th>مكان الطلب</th><th>التوقيت</th><th>الحالة</th><th>إجراء</th>
-                </tr>
-              </thead>
-              <tbody id="orders-tbody"></tbody>
-            </table>
-          </div>
-          <div class="empty-state hidden" id="orders-empty">
-            <div class="glyph">▤</div>
-            <p>لا توجد طلبات في هذا القسم حتى الآن</p>
-          </div>
-        </div>
-      </section>
-
-      <!-- المنتجات -->
-      <section class="tab-panel hidden" id="tab-s-products">
-        <div class="topbar">
-          <div>
-            <h2>المنتجات</h2>
-            <div class="sub">إدارة منتجات متجرك، المخزون، والفئات</div>
-          </div>
-          <button class="btn btn-primary" id="btn-add-product">+ أضف منتج</button>
-        </div>
-
-        <div class="stat-grid" id="products-stats"></div>
-
-        <div class="panel">
-          <div class="panel-head">
-            <div><h3>كل المنتجات</h3><div class="sub" id="products-count-label">0 منتج</div></div>
-            <input type="text" id="product-search" placeholder="بحث بالاسم أو السعر أو النوع..." style="padding:9px 13px;border-radius:8px;border:1.5px solid var(--line);font-size:13px;min-width:220px;">
-          </div>
-
-          <div class="tabs" id="products-filter-tabs" style="margin-bottom:14px;">
-            <button class="tab-btn active" data-pfilter="all">الكل</button>
-            <button class="tab-btn" data-pfilter="low_stock">قريبة النفاذ</button>
-            <button class="tab-btn" data-pfilter="out_of_stock">منتهية الكمية</button>
-            <button class="tab-btn" data-pfilter="most_ordered">الأكثر طلبًا</button>
-            <button class="tab-btn" data-pfilter="least_ordered">الأقل طلبًا</button>
-          </div>
-
-          <div class="form-grid" style="margin-bottom:14px;">
-            <div class="field">
-              <label>تصفية حسب الفئة</label>
-              <select id="product-category-filter">
-                <option value="">كل الفئات</option>
-              </select>
-            </div>
-          </div>
-
-          <div class="card-grid" id="products-grid"></div>
-          <div class="empty-state hidden" id="products-empty">
-            <div class="glyph">◫</div>
-            <p>لا توجد منتجات مطابقة</p>
-          </div>
-        </div>
-      </section>
-
-      <!-- الإعلانات -->
-      <section class="tab-panel hidden" id="tab-s-announcements">
-        <div class="topbar">
-          <div>
-            <h2>الإعلانات</h2>
-            <div class="sub">كل الإعلانات المرسلة من الإدارة (العامة والخاصة بمتجرك)</div>
-          </div>
-        </div>
-        <div class="panel">
-          <div id="store-announcements-list"></div>
-        </div>
-      </section>
-
-      <!-- ربط القنوات -->
-      <section class="tab-panel hidden" id="tab-s-whatsapp">
-        <div class="topbar">
-          <div>
-            <h2>ربط القنوات</h2>
-            <div class="sub">اربط حسابات متجرك حتى يبدأ الذكاء الاصطناعي بالرد على الزبائن من كل منصة</div>
-          </div>
-        </div>
-
-        <div class="channel-cards">
-          <!-- بطاقة واتساب -->
-          <div class="channel-card wa" id="channel-card-wa">
-            <div class="channel-icon">◉</div>
-            <div class="channel-name">واتساب</div>
-            <div class="channel-status-row disconnected" id="wa-status-row">
-              <span class="channel-status-dot"></span>
-              <span id="wa-status-label">غير متصل</span>
-            </div>
-            <div id="wa-connected-number" class="channel-external-name hidden"></div>
-            <button class="btn btn-primary btn-sm" id="btn-wa-open-modal" style="width:100%;">فتح إعدادات الربط</button>
-          </div>
-
-          <!-- بطاقة ماسنجر -->
-          <div class="channel-card messenger" id="channel-card-messenger">
-            <div class="channel-icon">✉</div>
-            <div class="channel-name">ماسنجر</div>
-            <div class="channel-status-row disconnected" id="messenger-status-row">
-              <span class="channel-status-dot"></span>
-              <span id="messenger-status-label">غير متصل</span>
-            </div>
-            <div id="messenger-external-name" class="channel-external-name hidden"></div>
-            <button class="btn btn-primary btn-sm" id="btn-messenger-connect" style="width:100%;">ربط الحساب عبر Meta</button>
-            <button class="btn btn-bad btn-sm hidden" id="btn-messenger-disconnect" style="width:100%;margin-top:8px;">فصل الربط</button>
-            <div class="channel-ai-row hidden" id="messenger-ai-row">
-              <span>تفعيل الذكاء الاصطناعي</span>
-              <label class="switch">
-                <input type="checkbox" id="messenger-ai-toggle">
-                <span class="slider"></span>
-              </label>
-            </div>
-          </div>
-
-          <!-- بطاقة انستغرام -->
-          <div class="channel-card instagram" id="channel-card-instagram">
-            <div class="channel-icon">◈</div>
-            <div class="channel-name">انستغرام</div>
-            <div class="channel-status-row disconnected" id="instagram-status-row">
-              <span class="channel-status-dot"></span>
-              <span id="instagram-status-label">غير متصل</span>
-            </div>
-            <div id="instagram-external-name" class="channel-external-name hidden"></div>
-            <button class="btn btn-primary btn-sm" id="btn-instagram-connect" style="width:100%;">ربط حساب انستغرام</button>
-            <div class="sub" style="margin-top:6px;">تسجيل دخول مباشر بحساب انستغرام (Business أو Creator) — بدون الحاجة لصفحة فيسبوك</div>
-            <button class="btn btn-bad btn-sm hidden" id="btn-instagram-disconnect" style="width:100%;margin-top:8px;">فصل الربط</button>
-            <div class="channel-ai-row hidden" id="instagram-ai-row">
-              <span>تفعيل الذكاء الاصطناعي</span>
-              <label class="switch">
-                <input type="checkbox" id="instagram-ai-toggle">
-                <span class="slider"></span>
-              </label>
-            </div>
-          </div>
-
-          <!-- بطاقة تيليجرام -->
-          <div class="channel-card telegram" id="channel-card-telegram">
-            <div class="channel-icon">✈</div>
-            <div class="channel-name">تيليجرام</div>
-            <div class="channel-status-row disconnected" id="telegram-status-row">
-              <span class="channel-status-dot"></span>
-              <span id="telegram-status-label">غير متصل</span>
-            </div>
-            <div id="telegram-external-name" class="channel-external-name hidden"></div>
-            <button class="btn btn-primary btn-sm" id="btn-telegram-connect" style="width:100%;">ربط بوت تيليجرام</button>
-            <div class="sub" style="margin-top:6px;">أنشئ بوتًا خاصًا بمتجرك عبر محادثة @BotFather بتطبيق تيليجرام، والصق توكنه هنا</div>
-            <button class="btn btn-bad btn-sm hidden" id="btn-telegram-disconnect" style="width:100%;margin-top:8px;">فصل الربط</button>
-            <div class="channel-ai-row hidden" id="telegram-ai-row">
-              <span>تفعيل الذكاء الاصطناعي</span>
-              <label class="switch">
-                <input type="checkbox" id="telegram-ai-toggle">
-                <span class="slider"></span>
-              </label>
-            </div>
-          </div>
-
-          <!-- بطاقة تيك توك -->
-          <div class="channel-card tiktok" id="channel-card-tiktok">
-            <div class="channel-icon">♪</div>
-            <div class="channel-name">تيك توك</div>
-            <div class="channel-status-row disconnected" id="tiktok-status-row">
-              <span class="channel-status-dot"></span>
-              <span id="tiktok-status-label">غير متصل</span>
-            </div>
-            <div id="tiktok-external-name" class="channel-external-name hidden"></div>
-            <button class="btn btn-primary btn-sm" id="btn-tiktok-connect" style="width:100%;">ربط حساب تيك توك</button>
-            <div class="sub" style="margin-top:6px;">يتطلب حساب تيك توك Business وموافقة تيك توك على صلاحية الرسائل قبل أن يعمل الرد التلقائي فعليًا</div>
-            <button class="btn btn-bad btn-sm hidden" id="btn-tiktok-disconnect" style="width:100%;margin-top:8px;">فصل الربط</button>
-            <div class="channel-ai-row hidden" id="tiktok-ai-row">
-              <span>تفعيل الذكاء الاصطناعي</span>
-              <label class="switch">
-                <input type="checkbox" id="tiktok-ai-toggle">
-                <span class="slider"></span>
-              </label>
-            </div>
-          </div>
-        </div>
-
-        <p style="color:var(--ink-soft);font-size:12.5px;">
-          ملاحظة: ربط ماسنجر وانستغرام يفتح نافذة منبثقة من فيسبوك (Meta) لتسجيل الدخول والموافقة على الصلاحيات، ثم تُغلق تلقائيًا بعد نجاح الربط.
-        </p>
-      </section>
-
-      <!-- إعدادات الذكاء الاصطناعي (لكل متجر) -->
-      <section class="tab-panel hidden" id="tab-s-ai">
-        <div class="topbar">
-          <div>
-            <h2>إعدادات الذكاء الاصطناعي</h2>
-            <div class="sub">هوية البوت أمام زبائنك — مفاتيح ونماذج الذكاء الاصطناعي تُدار من قبل الإدارة العامة فقط</div>
-          </div>
-        </div>
-
-        <div class="panel">
-          <div class="panel-head"><h3>هوية البوت</h3></div>
-          <div class="form-grid">
-            <div class="field">
-              <label>اسم المتجر الذي يظهر للبوت أثناء الرد</label>
-              <input type="text" id="store-ai-display-name" placeholder="مثال: متجر لمسة أناقة">
-            </div>
-            <div class="field">
-              <label>وسيلة التواصل (رابط / بريد / رقم)</label>
-              <input type="text" id="store-ai-contact-info" placeholder="مثال: 07xxxxxxxxx أو رابط انستغرام">
-            </div>
-          </div>
-          <p class="sub" style="margin-top:8px;">يستخدم البوت هذين الحقلين فقط لتقديم نفسه ومشاركة وسيلة تواصل عند الحاجة. لا يمكن تخصيص تعليمات أخرى — هذا لضمان التزام البوت بقواعد الأمان والمنتجات المتوفرة فقط.</p>
-          <div style="margin-top:14px;"><button class="btn btn-primary btn-sm" id="save-store-ai-settings">حفظ</button></div>
-        </div>
-      </section>
-
-      <!-- الطباعة -->
-      <section class="tab-panel hidden" id="tab-s-print">
-        <div class="topbar">
-          <div>
-            <h2>طباعة الطلبات</h2>
-            <div class="sub">اختر نوع الطلبات وشكل الطباعة المناسب</div>
-          </div>
-        </div>
-        <div class="panel">
-          <div class="panel-head"><h3>ماذا تريد أن تطبع؟</h3></div>
-          <div class="form-grid">
-            <div class="field">
-              <label>حالة الطلبات</label>
-              <select id="print-status">
-                <option value="all">كل الطلبات</option>
-                <option value="pending">بالانتظار فقط</option>
-                <option value="completed">المنجزة فقط</option>
-                <option value="cancelled">الملغاة فقط</option>
-              </select>
-            </div>
-            <div class="field">
-              <label>شكل الطباعة</label>
-              <select id="print-mode">
-                <option value="table">جدول عادي</option>
-                <option value="labels">بطاقات لكل زبون (للصق على المنتج)</option>
-              </select>
-            </div>
-            <div class="field">
-              <label>من تاريخ (اختياري)</label>
-              <input type="date" id="print-from-date">
-            </div>
-          </div>
-          <div style="margin-top:16px;"><button class="btn btn-primary" id="btn-print">⎙ طباعة الآن</button></div>
-        </div>
-      </section>
-
-      <!-- تقديم شكوى -->
-      <section class="tab-panel hidden" id="tab-s-complaint">
-        <div class="topbar">
-          <div>
-            <h2>تقديم شكوى للمشرف</h2>
-            <div class="sub">سيتم إرسال شكواك مباشرة إلى لوحة المشرف العام</div>
-          </div>
-        </div>
-        <div class="panel">
-          <div class="form-grid">
-            <div class="field" style="grid-column:1/-1;">
-              <label>موضوع الشكوى</label>
-              <input type="text" id="complaint-subject" placeholder="مثال: مشكلة في ربط الواتساب">
-            </div>
-            <div class="field" style="grid-column:1/-1;">
-              <label>تفاصيل الشكوى</label>
-              <textarea id="complaint-message" rows="4" placeholder="اشرح المشكلة بالتفصيل..."></textarea>
-            </div>
-          </div>
-          <div style="margin-top:14px;"><button class="btn btn-primary btn-sm" id="send-complaint">إرسال الشكوى</button></div>
-        </div>
-        <div class="panel">
-          <div class="panel-head"><h3>شكاويّ السابقة</h3></div>
-          <div id="my-complaints-list"></div>
-        </div>
-      </section>
-
-      <!-- الاشتراك -->
-      <section class="tab-panel hidden" id="tab-s-subscription">
-        <div class="topbar">
-          <div>
-            <h2>الاشتراك</h2>
-            <div class="sub">حالة خطتك الحالية بالمنصة</div>
-          </div>
-        </div>
-        <div class="panel">
-          <div id="sub-badge-free" class="sub-plan-badge sub-badge-free hidden">
-            <div class="sub-badge-icon">🎁</div>
-            <div class="sub-badge-label">مجاني</div>
-            <div class="sub-badge-dates" id="sub-badge-dates-free"></div>
-          </div>
-          <div id="sub-badge-month" class="sub-plan-badge sub-badge-month hidden">
-            <div class="sub-badge-icon">📅</div>
-            <div class="sub-badge-label">شهري</div>
-            <div class="sub-badge-price" id="sub-badge-price-month"></div>
-            <div class="sub-badge-dates" id="sub-badge-dates-month"></div>
-          </div>
-          <div id="sub-badge-year" class="sub-plan-badge sub-badge-year hidden">
-            <div class="sub-badge-icon">⭐</div>
-            <div class="sub-badge-label">سنوي</div>
-            <div class="sub-badge-price" id="sub-badge-price-year"></div>
-            <div class="sub-badge-dates" id="sub-badge-dates-year"></div>
-          </div>
-          <a href="subscribe.html" target="_blank" rel="noopener" class="btn btn-primary btn-sm" style="width:auto;margin-top:16px;">ترقية / تجديد الاشتراك</a>
-        </div>
-      </section>
-
-      <!-- إعدادات الحساب -->
-      <section class="tab-panel hidden" id="tab-s-settings">
-
-        <!-- الواجهة الرئيسية لإعدادات الحساب -->
-        <div id="settings-home-view">
-          <div class="topbar">
-            <div>
-              <h2>إعدادات الحساب</h2>
-              <div class="sub">معلومات متجرك (البيانات الأساسية بيد المشرف)</div>
-            </div>
-          </div>
-          <div class="panel">
-            <div class="panel-head"><h3>معلومات المتجر</h3></div>
-            <div class="form-grid" id="store-info-view"></div>
-          </div>
-
-          <div class="panel">
-            <div class="panel-head"><h3>حول التطبيق</h3></div>
-            <div class="settings-links-list">
-              <a class="settings-link-item" href="about.html" target="_blank" rel="noopener">
-                <span>من نحن</span><span class="arrow">‹</span>
-              </a>
-              <a class="settings-link-item" href="privacy.html" target="_blank" rel="noopener">
-                <span>شروط الخصوصية</span><span class="arrow">‹</span>
-              </a>
-              <a class="settings-link-item" href="terms.html" target="_blank" rel="noopener">
-                <span>شروط الخدمة</span><span class="arrow">‹</span>
-              </a>
-              <a class="settings-link-item" href="faq.html" target="_blank" rel="noopener">
-                <span>الأسئلة الشائعة</span><span class="arrow">‹</span>
-              </a>
-            </div>
-          </div>
-
-          <div class="panel" style="border-color:var(--bad);">
-            <div class="panel-head"><h3 style="color:var(--bad);">منطقة الخطر</h3></div>
-            <p class="sub" style="margin-bottom:14px;">حذف حسابك نهائيًا من المنصة وكل بياناته المرتبطة به.</p>
-            <button class="btn btn-bad btn-sm" id="btn-open-delete-account">تقديم بطلب حذف الحساب</button>
-          </div>
-        </div>
-
-      </section>
-    </main>
-  </div>
-</div>
-
-<!-- =========================================================
-     المودالات
-========================================================= -->
-
-<!-- مودال ربط واتساب (QR) -->
-<div class="modal-backdrop" id="modal-wa">
-  <div class="modal" style="max-width:420px;">
-    <div class="modal-head">
-      <h3>ربط واتساب</h3>
-      <button class="modal-close" data-close="modal-wa">✕</button>
-    </div>
-
-    <div id="wa-state-disconnected">
-      <div class="empty-state" style="padding:30px 20px;">
-        <div class="glyph">◉</div>
-        <p style="margin-bottom:16px;">متجرك غير مربوط بواتساب حاليًا</p>
-        <button class="btn btn-primary" id="btn-wa-connect">ربط واتساب</button>
-      </div>
-    </div>
-
-    <div id="wa-state-loading" class="hidden" style="text-align:center;padding:30px 20px;">
-      <p style="color:var(--ink-soft);font-size:13.5px;">جارٍ تحضير رمز الربط...</p>
-    </div>
-
-    <div id="wa-state-qr" class="hidden" style="text-align:center;padding:20px;">
-      <p style="font-weight:700;margin-bottom:14px;">امسح الكود التالي من واتساب</p>
-      <p style="color:var(--ink-soft);font-size:12.5px;margin-bottom:16px;">واتساب ← الأجهزة المرتبطة ← ربط جهاز</p>
-      <img id="wa-qr-img" src="" alt="رمز QR" style="width:230px;height:230px;border-radius:14px;border:1px solid var(--line);padding:10px;background:#fff;" />
-      <div style="margin-top:16px;">
-        <button class="btn btn-outline btn-sm" id="btn-wa-refresh-qr">تحديث الرمز</button>
-      </div>
-    </div>
-
-    <div id="wa-state-connected" class="hidden">
-      <div class="empty-state" style="padding:30px 20px;">
-        <div class="glyph" style="color:var(--ok);">✔</div>
-        <p style="margin-bottom:4px;font-weight:700;color:var(--ok);">تم الربط بنجاح</p>
-        <p id="wa-connected-number-modal" style="color:var(--ink-soft);font-family:var(--font-mono);margin-bottom:18px;"></p>
-        <button class="btn btn-bad" id="btn-wa-disconnect">فصل الربط</button>
-      </div>
-    </div>
-  </div>
-</div>
-
-<!-- مودال اختيار صفحة فيسبوك عند ربط ماسنجر (تظهر فقط إذا كان لحساب التاجر أكثر من صفحة) -->
-<div class="modal-backdrop" id="modal-page-select">
-  <div class="modal" style="max-width:420px;">
-    <div class="modal-head">
-      <h3>اختر صفحة فيسبوك</h3>
-      <button class="modal-close" id="btn-page-select-close">✕</button>
-    </div>
-    <p style="color:var(--ink-soft);font-size:13px;margin:-8px 0 14px;">حسابك مسؤول عن أكثر من صفحة على فيسبوك، اختر الصفحة التي تريد ربطها بمتجرك:</p>
-    <div id="page-select-list" style="display:flex;flex-direction:column;gap:8px;max-height:360px;overflow-y:auto;"></div>
-  </div>
-</div>
-
-<!-- مودال ربط بوت تيليجرام (لصق التوكن مباشرة، بدون نافذة OAuth) -->
-<div class="modal-backdrop" id="modal-telegram-connect">
-  <div class="modal" style="max-width:420px;">
-    <div class="modal-head">
-      <h3>ربط بوت تيليجرام</h3>
-      <button class="modal-close" data-close="modal-telegram-connect">✕</button>
-    </div>
-    <p style="color:var(--ink-soft);font-size:13px;margin:-8px 0 14px;">
-      1) افتح تيليجرام وابحث عن <b>@BotFather</b><br>
-      2) أرسل له الأمر <b>/newbot</b> واتبع التعليمات لتسمية البوت<br>
-      3) سينشئ لك توكنًا (يشبه <span style="font-family:var(--font-mono);">123456:ABC-defGhIJ...</span>)، الصقه هنا:
-    </p>
-    <div class="field">
-      <label for="f-telegram-bot-token">توكن البوت</label>
-      <input type="text" id="f-telegram-bot-token" placeholder="مثال: 123456:ABC-defGhIJ..." dir="ltr">
-    </div>
-    <button class="btn btn-primary btn-sm" id="btn-telegram-connect-submit" style="width:100%;">ربط البوت</button>
-  </div>
-</div>
-
-<!-- مودال استثناءات قناة لمتاجر محددة (لوحة الأدمن) -->
-<div class="modal-backdrop" id="modal-channel-override">
-  <div class="modal" style="max-width:480px;">
-    <div class="modal-head">
-      <h3>استثناءات قناة <span id="channel-override-title"></span></h3>
-      <button class="modal-close" data-close="modal-channel-override">✕</button>
-    </div>
-    <p style="color:var(--ink-soft);font-size:13px;margin:-8px 0 14px;">
-      اختر متجرًا لتخصيص إظهار أو حالة هذه القناة له فقط، بغضّ النظر عن الإعداد العام أعلاه.
-    </p>
-    <div class="form-grid">
-      <div class="field">
-        <label>المتجر</label>
-        <select id="ov-store-select"></select>
-      </div>
-      <div class="field">
-        <label>الإظهار لهذا المتجر</label>
-        <select id="ov-visibility-select">
-          <option value="">يتبع الإعداد العام</option>
-          <option value="visible">إظهار دائمًا</option>
-          <option value="hidden">إخفاء دائمًا</option>
-        </select>
-      </div>
-      <div class="field" style="grid-column:1/-1;">
-        <label>حالة الربط لهذا المتجر</label>
-        <select id="ov-status-select">
-          <option value="">يتبع الإعداد العام</option>
-          <option value="enabled">مفتوحة دائمًا</option>
-          <option value="disabled">مغلقة دائمًا</option>
-        </select>
-      </div>
-    </div>
-    <button class="btn btn-primary btn-sm" id="btn-save-override" style="width:100%;margin-bottom:16px;">حفظ الاستثناء</button>
-
-    <div class="panel-head" style="padding:0;margin-bottom:8px;"><h3 style="font-size:14px;">استثناءات حالية</h3></div>
-    <div id="channel-override-list"></div>
-  </div>
-</div>
-
-<!-- مودال إضافة/تعديل متجر -->
-<div class="modal-backdrop" id="modal-store">
-  <div class="modal">
-    <div class="modal-head">
-      <h3 id="store-modal-title">إضافة متجر جديد</h3>
-      <button class="modal-close" data-close="modal-store">✕</button>
-    </div>
-    <div class="form-grid">
-      <div class="field">
-        <label>اسم المتجر</label>
-        <input type="text" id="f-store-name" placeholder="مثال: متجر الأمل">
-      </div>
-      <div class="field">
-        <label>الاسم الكامل لصاحب المتجر</label>
-        <input type="text" id="f-full-name" placeholder="الاسم الثلاثي">
-      </div>
-      <div class="field">
-        <label>رقم دخول المتجر (لوحة التحكم)</label>
-        <input type="text" id="f-store-phone" placeholder="07xxxxxxxxx" style="font-family:var(--font-mono)">
-      </div>
-      <div class="field">
-        <label>كلمة مرور دخول المتجر</label>
-        <input type="text" id="f-store-password" placeholder="كلمة المرور" style="font-family:var(--font-mono)">
-      </div>
-      <div class="field">
-        <label>رقم واتساب البوت المرتبط (ai_phone)</label>
-        <input type="text" id="f-ai-phone" placeholder="9647xxxxxxxxx" style="font-family:var(--font-mono)">
-      </div>
-      <div class="field">
-        <label>حالة المتجر</label>
-        <select id="f-status">
-          <option value="active">نشط</option>
-          <option value="suspended">موقوف</option>
-        </select>
-      </div>
-      <div class="field">
-        <label>خطة الاشتراك</label>
-        <select id="f-plan">
-          <option value="free">مجانية (7 أيام)</option>
-          <option value="month">شهرية</option>
-          <option value="year">سنوية</option>
-        </select>
-      </div>
-      <div class="field">
-        <label>حالة الاشتراك</label>
-        <select id="f-is-active">
-          <option value="true">ساري</option>
-          <option value="false">منتهي (يحتاج تجديد)</option>
-        </select>
-      </div>
-      <div class="field">
-        <label>تاريخ نفاذ الاشتراك</label>
-        <input type="date" id="f-expires-at">
-        <div style="margin-top:6px;"><button type="button" class="btn btn-outline btn-sm" id="btn-extend-30">+ تمديد 30 يوم</button></div>
-      </div>
-      <div class="field" style="grid-column:1/-1;">
-        <label>رابط / بيانات الباركود للربط على واتساب</label>
-        <input type="text" id="f-barcode" placeholder="رابط الربط أو نص QR">
-      </div>
-      <div class="field" style="grid-column:1/-1;">
-        <label>ملاحظات إضافية</label>
-        <textarea id="f-notes" rows="2" placeholder="أي معلومات إضافية عن المتجر"></textarea>
-      </div>
-    </div>
-
-    <hr style="border:none;border-top:1px solid var(--line);margin:20px 0;">
-
-    <div class="panel-head" style="margin-bottom:10px;">
-      <h3 style="font-size:14px;">منتجات المتجر</h3>
-      <button class="btn btn-outline btn-sm" id="btn-add-product-row">+ إضافة منتج</button>
-    </div>
-    <div id="products-list"></div>
-
-    <div class="modal-foot">
-      <button class="btn btn-outline btn-sm" data-close="modal-store">إلغاء</button>
-      <button class="btn btn-primary btn-sm" id="save-store-btn">حفظ المتجر</button>
-    </div>
-  </div>
-</div>
-
-<!-- مودال زبائن متجر (من لوحة الأدمن) -->
-<div class="modal-backdrop" id="modal-store-customers">
-  <div class="modal">
-    <div class="modal-head">
-      <h3 id="customers-modal-title">زبائن المتجر</h3>
-      <button class="modal-close" data-close="modal-store-customers">✕</button>
-    </div>
-    <div class="table-wrap">
-      <table>
-        <thead><tr><th>الاسم</th><th>الموقع</th><th>الرقم</th><th>الحالة</th><th>الوقت</th></tr></thead>
-      <!-- ملاحظة: الحالة هنا هي حالة الطلب (منجز/ملغي)، وليست حالة ربط واتساب. حالة ربط واتساب تظهر ببطاقة المتجر بقائمة المتاجر. -->
-        <tbody id="admin-customers-tbody"></tbody>
-      </table>
-    </div>
-  </div>
-</div>
-
-<!-- مودال قنوات متجر (من لوحة الأدمن) -->
-<div class="modal-backdrop" id="modal-store-channels">
-  <div class="modal">
-    <div class="modal-head">
-      <h3 id="channels-modal-title">قنوات المتجر</h3>
-      <button class="modal-close" data-close="modal-store-channels">✕</button>
-    </div>
-    <div id="admin-channels-body"></div>
-  </div>
-</div>
-
-<!-- مودال إضافة/تعديل منتج (لوحة التاجر) -->
-<div class="modal-backdrop" id="modal-product">
-  <div class="modal">
-    <div class="modal-head">
-      <h3 id="product-modal-title">إضافة منتج جديد</h3>
-      <button class="modal-close" data-close="modal-product">✕</button>
-    </div>
-    <div class="form-grid">
-      <div class="field" style="grid-column:1/-1;">
-        <label>اسم المنتج</label>
-        <input type="text" id="p-name" placeholder="مثال: فستان صيفي">
-      </div>
-      <div class="field">
-        <label>فئة المنتج</label>
-        <input type="text" id="p-category" placeholder="مثال: ملابس نسائية" list="p-category-list">
-        <datalist id="p-category-list"></datalist>
-      </div>
-      <div class="field">
-        <label>نوع المنتج (الخيارات المتاحة)</label>
-        <input type="text" id="p-variant-type" placeholder="مثال: أحمر، أزرق، أخضر أو S، M، L">
-      </div>
-      <div class="field">
-        <label>السعر</label>
-        <input type="number" id="p-price" placeholder="0" step="0.01">
-      </div>
-      <div class="field">
-        <label>نسبة الخصم % (اختياري)</label>
-        <input type="number" id="p-discount" placeholder="0" step="0.01" min="0" max="100">
-      </div>
-      <div class="field">
-        <label>كمية المخزون</label>
-        <input type="number" id="p-stock" placeholder="0" step="1" min="0">
-      </div>
-      <div class="field">
-        <label>رابط فيديو المنتج (اختياري)</label>
-        <input type="text" id="p-video" placeholder="رابط انستغرام/تيكتوك/يوتيوب...">
-      </div>
-      <div class="field" style="grid-column:1/-1;">
-        <label>وصف المنتج</label>
-        <textarea id="p-description" rows="3" placeholder="وصف مختصر للمنتج..."></textarea>
-      </div>
-    </div>
-    <div class="modal-foot">
-      <button class="btn btn-outline btn-sm" data-close="modal-product">إلغاء</button>
-      <button class="btn btn-primary btn-sm" id="save-product-btn">حفظ المنتج</button>
-    </div>
-  </div>
-</div>
-
-<!-- مودال تقديم بطلب حذف الحساب -->
-<div class="modal-backdrop" id="modal-delete-account">
-  <div class="modal" style="max-width:480px;">
-    <div class="modal-head">
-      <h3>تقديم بطلب حذف الحساب</h3>
-      <button class="modal-close" data-close="modal-delete-account">✕</button>
-    </div>
-
-    <!-- الخطوة 1: التحذير والموافقة على الشروط -->
-    <div id="delete-account-step-warning">
-      <div class="warn-box">
-        ⚠️ أنت على وشك تقديم طلب حذف حسابك نهائيًا. تأكد من قراءة النقاط التالية جيدًا:
-      </div>
-      <ul style="color:var(--ink-soft);font-size:13.5px;padding-inline-start:20px;margin:14px 0;line-height:1.9;">
-        <li>هل أنت متأكد من أنك تريد حذف الحساب؟ ستفقد جميع بياناتك ومنتجاتك وسجل طلباتك نهائيًا.</li>
-        <li>سيخضع طلبك لمراجعة فريق الإدارة قبل تنفيذه.</li>
-        <li>تستغرق عملية الحذف الفعلية من <b>يومين إلى ثلاثة أيام</b> من تاريخ تقديم الطلب.</li>
-        <li>هل أنت متأكد من مخاطر حذف الحساب نهائيًا؟ لا يمكن التراجع عن هذا الإجراء بعد تنفيذه.</li>
-      </ul>
-      <label style="display:flex;align-items:flex-start;gap:8px;font-size:13px;color:var(--ink-soft);cursor:pointer;margin-bottom:6px;">
-        <input type="checkbox" id="delete-account-agree-terms" style="margin-top:3px;">
-        <span>
-          أوافق على
-          <a href="terms.html" target="_blank" rel="noopener" style="color:var(--palm);font-weight:700;">شروط الخدمة</a>
-          بما في ذلك أن حذف الحساب أثناء وجود اشتراك سارٍ لا يُلزم الشركة باسترجاع أي مبالغ مدفوعة عن ذلك الاشتراك.
-        </span>
-      </label>
-      <div class="modal-foot">
-        <button class="btn btn-outline btn-sm" data-close="modal-delete-account">إلغاء</button>
-        <button class="btn btn-bad btn-sm" id="btn-delete-account-continue">متابعة</button>
-      </div>
-    </div>
-
-    <!-- الخطوة 2: كتابة سبب الحذف -->
-    <div id="delete-account-step-reason" class="hidden">
-      <p style="color:var(--ink-soft);font-size:13.5px;margin:-6px 0 14px;">
-        الرجاء كتابة سبب رغبتك في حذف الحساب، ليتم إرسال طلبك إلى فريق الإدارة:
+</nav>
+
+<!-- ===== الهيرو ===== -->
+<div class="hero">
+  <div class="wrap hero-grid">
+    <div>
+      <h1>زبونك يسأل بواتساب، ونظامك يرد ويبيع — وأنت نايم</h1>
+      <p class="lead">
+        منصة عربية تربط متجرك بواتساب وماسنجر وانستغرام وتيليجرام وتيك توك من مكان واحد،
+        ويردّ فيها الذكاء الاصطناعي على استفسارات زبائنك ويسجّل طلباتهم تلقائيًا، بينما تتابع
+        أنت كل شي من لوحة تحكم واحدة بسيطة.
       </p>
-      <div class="field">
-        <label>سبب حذف الحساب</label>
-        <textarea id="delete-account-reason" rows="4" placeholder="اكتب السبب هنا..."></textarea>
+      <div class="hero-cta">
+        <a href="register.html" class="btn btn-gold">ابدأ تجربتك المجانية 7 أيام</a>
+        <a href="app.html" class="btn btn-outline">تسجيل دخول</a>
       </div>
-      <div class="modal-foot">
-        <button class="btn btn-outline btn-sm" id="btn-delete-account-back">رجوع</button>
-        <button class="btn btn-bad btn-sm" id="btn-delete-account-submit">تقديم الطلب</button>
-      </div>
+      <div class="hero-note">بدون بطاقة ائتمانية، وبدون أي التزام</div>
     </div>
 
-    <!-- الخطوة 3: تم الإرسال -->
-    <div id="delete-account-step-done" class="hidden">
-      <div class="empty-state" style="padding:20px 10px;">
-        <div class="glyph" style="color:var(--bad);">✔</div>
-        <p style="margin-bottom:4px;font-weight:700;">تم إرسال طلبك بنجاح</p>
-        <p style="color:var(--ink-soft);font-size:13.5px;">سيتم التواصل معك بعد مراجعة الطلب من قِبل الإدارة، خلال يومين إلى ثلاثة أيام.</p>
+    <div class="phone-mock">
+      <div class="phone-head">
+        <div class="av">👤</div>
+        <div><b>زبون</b><span>● متصل الآن</span></div>
       </div>
-      <div class="modal-foot">
-        <button class="btn btn-primary btn-sm" data-close="modal-delete-account">إغلاق</button>
-      </div>
+      <div class="bubble in">متوفر عندكم قميص أزرق مقاس L؟</div>
+      <div class="bubble typing"><span></span><span></span><span></span></div>
+      <div class="bubble out">أيوة متوفر ✅ السعر 25,000 د.ع، أسجّل لك الطلب الحين؟</div>
     </div>
   </div>
 </div>
 
-<!-- منطقة الطباعة (مخفية، تظهر فقط عند الطباعة) -->
-<div class="print-area" id="print-area"></div>
+<!-- ===== شريط القنوات ===== -->
+<div class="channels-strip">
+  <div class="wrap channels-row">
+    <span><i class="dot"></i> واتساب</span>
+    <span><i class="dot"></i> ماسنجر</span>
+    <span><i class="dot"></i> انستغرام</span>
+    <span><i class="dot"></i> تيليجرام</span>
+    <span><i class="dot"></i> تيك توك</span>
+  </div>
+</div>
 
-<div class="toast-host" id="toast-host"></div>
+<!-- ===== كيف يعمل ===== -->
+<section>
+  <div class="wrap">
+    <div class="section-head">
+      <h2>يشتغل بثلاث خطوات بس</h2>
+      <p>بدون برمجة، وبدون خبرة تقنية سابقة.</p>
+    </div>
+    <div class="steps">
+      <div class="step">
+        <h3>اربط قنواتك</h3>
+        <p>امسح رمز QR لربط واتساب، أو وصّل حساباتك على ماسنجر وانستغرام وتيليجرام وتيك توك خلال دقائق.</p>
+      </div>
+      <div class="step">
+        <h3>الذكاء الاصطناعي يرد ويبيع</h3>
+        <p>يجاوب على استفسارات الزبائن عن منتجاتك وأسعارك تلقائيًا، ويسجّل طلباتهم فور تأكيدها.</p>
+      </div>
+      <div class="step">
+        <h3>تابع من لوحة واحدة</h3>
+        <p>كل الطلبات والشكاوى وحالة كل قناة أمامك بمكان واحد، تراجعها وتحدّثها بضغطة.</p>
+      </div>
+    </div>
+  </div>
+</section>
 
-<script src="js/config.js"></script>
-<script src="js/supabase-client.js"></script>
-<script src="js/app.js"></script>
+<!-- ===== المزايا ===== -->
+<section class="features">
+  <div class="wrap">
+    <div class="section-head">
+      <h2>كل شي يحتاجه متجرك الصغير</h2>
+      <p>بدون أدوات متفرقة ولا اشتراكات متعددة.</p>
+    </div>
+    <div class="feat-grid">
+      <div class="feat">
+        <h3>ردّ آلي بالذكاء الاصطناعي</h3>
+        <p>يفهم أسئلة زبائنك ويجاوب بلهجتك، على مدار الساعة، بدون ما تكتب رد وحدة بنفسك.</p>
+      </div>
+      <div class="feat">
+        <h3>خمس قنوات بلوحة وحدة</h3>
+        <p>واتساب وماسنجر وانستغرام وتيليجرام وتيك توك، كلهم مربوطين ومتابعين من نفس المكان.</p>
+      </div>
+      <div class="feat">
+        <h3>إدارة الطلبات والمنتجات</h3>
+        <p>سجل طلبات منظّم، وقائمة منتجاتك جاهزة يعتمد عليها الذكاء الاصطناعي بردوده.</p>
+      </div>
+      <div class="feat">
+        <h3>شكاوى ودعم فني</h3>
+        <p>قناة مباشرة لتقديم أي مشكلة تواجهها، ومتابعتها لين تنحل.</p>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ===== CTA وسط الصفحة ===== -->
+<section>
+  <div class="wrap">
+    <div class="mid-cta">
+      <h2>جرّب المنصة 7 أيام كاملة، مجانًا</h2>
+      <p>إنشاء الحساب يأخذ أقل من دقيقتين، وما يحتاج بطاقة ائتمانية.</p>
+      <div class="hero-cta">
+        <a href="register.html" class="btn btn-gold">ابدأ الآن</a>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ===== من نحن (مختصر) ===== -->
+<section>
+  <div class="wrap about-box">
+    <blockquote>نبنيها عشان صاحب المحل يرجع لبيته من دون ما يظل عالق يرد على الرسائل.</blockquote>
+    <div class="about-text">
+      <p>
+        <b>Radka</b> منصة عربية تساعد أصحاب المتاجر الصغيرة والمتوسطة على إدارة طلبات ومنتجات متاجرهم،
+        والرد الآلي على عملائهم بالذكاء الاصطناعي عبر أكثر من قناة، من لوحة تحكم واحدة سهلة الاستخدام
+        لا تحتاج أي خبرة تقنية.
+      </p>
+      <a href="about.html" class="btn btn-outline btn-sm">اقرأ المزيد عنّا</a>
+    </div>
+  </div>
+</section>
+
+<!-- ===== التواصل ===== -->
+<div class="contact-strip">
+  <div class="wrap contact-row">
+    <div class="contact-items">
+      <div class="contact-item"><span class="ic">📞</span> +964 785 417 9840</div>
+      <div class="contact-item"><span class="ic">📍</span> العراق — النجف الأشرف</div>
+    </div>
+    <a href="register.html" class="btn btn-gold btn-sm">جرّب مجانًا الآن</a>
+  </div>
+</div>
+
+<!-- ===== الفوتر ===== -->
+<footer>
+  <div class="wrap">
+    <div class="foot-top">
+      <div class="foot-brand">
+        <a href="#" class="brand"><span class="glyph">وب</span> <b>Radka</b></a>
+        <p>منصّة عربية لإدارة متجرك والرد على زبائنك بالذكاء الاصطناعي عبر كل قنوات التواصل.</p>
+      </div>
+      <div class="foot-links">
+        <a href="about.html">من نحن</a>
+        <a href="faq.html">الأسئلة الشائعة</a>
+        <a href="privacy.html">سياسة الخصوصية</a>
+        <a href="terms.html">شروط الخدمة</a>
+        <a href="data-deletion.html">حذف البيانات</a>
+      </div>
+    </div>
+    <div class="foot-bottom">© 2026 Radka. جميع الحقوق محفوظة. — العراق، النجف الأشرف</div>
+  </div>
+</footer>
+
 </body>
 </html>
