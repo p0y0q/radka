@@ -6,12 +6,11 @@
 <title>الاشتراك | Radka</title>
 <link rel="stylesheet" href="assets/style.css" />
 <style>
-  /* تنسيقات خاصة بصفحة الاشتراك فقط */
   .hidden-block { display: none; }
   .success-block { text-align: center; padding: 10px 0; }
   .success-block .glyph-ok {
     width: 56px; height: 56px; border-radius: 50%;
-    background: var(--ok-tint); color: var(--ok);
+    background: var(--wait-tint); color: var(--wait);
     display: grid; place-items: center; font-size: 28px; font-weight: 900;
     margin: 0 auto 14px;
   }
@@ -42,8 +41,6 @@
   .plan-card.active { border-color: var(--palm-deep); background: var(--palm-tint); }
   .plan-card .label { font-weight: 800; font-size: 14px; margin-bottom: 6px; }
   .plan-card .price { font-family: var(--font-mono); font-weight: 900; font-size: 16px; color: var(--palm-deep); }
-  .plan-card .price small { font-size: 11px; font-weight: 600; color: var(--ink-soft); }
-  .plan-card .price del { color: var(--ink-soft); font-size: 12px; margin-inline-end: 6px; }
 
   .discount-row { display: flex; gap: 8px; margin-bottom: 18px; }
   .discount-row input { flex: 1; }
@@ -52,24 +49,36 @@
   .discount-msg.ok { color: var(--ok); }
   .discount-msg.bad { color: var(--bad); }
 
-  .pay-methods { display: flex; gap: 8px; margin-bottom: 18px; }
-  .pay-method {
-    flex: 1; border: 2px solid var(--line); border-radius: var(--radius-s); padding: 10px;
-    text-align: center; font-size: 13px; font-weight: 700; cursor: pointer;
-  }
-  .pay-method.active { border-color: var(--palm-deep); background: var(--palm-tint); }
-  .pay-method.disabled { opacity: .5; cursor: not-allowed; }
-  .pay-method small { display: block; font-weight: 600; color: var(--ink-soft); font-size: 10.5px; margin-top: 2px; }
-
-  .card-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; }
-  .card-grid .field.full { grid-column: 1 / -1; }
-
   .total-box {
     background: var(--palm-tint); border-radius: var(--radius-s); padding: 14px;
     display: flex; justify-content: space-between; align-items: center; margin-bottom: 18px;
   }
   .total-box .lbl { font-size: 13px; font-weight: 700; color: var(--ink-soft); }
   .total-box .val { font-family: var(--font-mono); font-weight: 900; font-size: 18px; color: var(--palm-deep); }
+
+  .pay-methods { display: flex; gap: 8px; margin-bottom: 14px; }
+  .pay-method {
+    flex: 1; border: 2px solid var(--line); border-radius: var(--radius-s); padding: 10px;
+    text-align: center; font-size: 13px; font-weight: 700; cursor: pointer;
+  }
+  .pay-method.active { border-color: var(--palm-deep); background: var(--palm-tint); }
+  .pay-method.disabled { opacity: .45; cursor: not-allowed; }
+  .pay-method small { display: block; font-weight: 600; color: var(--ink-soft); font-size: 10.5px; margin-top: 2px; }
+
+  .provider-methods { display: flex; gap: 8px; margin-bottom: 16px; }
+  .provider-method {
+    flex: 1; border: 2px solid var(--line); border-radius: var(--radius-s); padding: 10px;
+    text-align: center; font-size: 13px; font-weight: 700; cursor: pointer;
+  }
+  .provider-method.active { border-color: var(--gold, #b8860b); background: var(--gold-tint, #fdf6e3); }
+  .provider-method.disabled { opacity: .45; cursor: not-allowed; }
+
+  .transfer-box { border: 1px dashed var(--line); border-radius: var(--radius-s); padding: 16px; text-align: center; margin-bottom: 18px; }
+  .transfer-box img.qr { width: 180px; height: 180px; object-fit: contain; border: 1px solid var(--line); border-radius: 10px; padding: 6px; background: #fff; margin-bottom: 12px; }
+  .wallet-copy-row { display: flex; align-items: center; justify-content: center; gap: 8px; margin-bottom: 4px; }
+  .wallet-copy-row .num { font-family: var(--font-mono); font-weight: 800; font-size: 15px; }
+  .wallet-copy-row button { width: auto; padding: 6px 12px; font-size: 12px; }
+  .transfer-box .note { font-size: 11.5px; color: var(--ink-soft); margin-top: 8px; }
 </style>
 </head>
 <body>
@@ -86,7 +95,6 @@
 
     <div class="login-alert" id="sub-alert"></div>
 
-    <!-- ============ خطوة 1: تسجيل الدخول برقم المتجر ============ -->
     <form id="auth-form">
       <div class="field">
         <label for="auth-phone">رقم الهاتف (رقم حسابك بالمنصة)</label>
@@ -100,7 +108,6 @@
       <button type="submit" class="btn btn-primary" id="auth-submit">متابعة</button>
     </form>
 
-    <!-- ============ حالة: يوجد اشتراك مدفوع سارٍ بالفعل ============ -->
     <div id="active-section" class="hidden-block active-block">
       <div class="glyph-wait">⏳</div>
       <h2 style="margin:0 0 8px;font-size:17px;text-align:center;">عملية الاشتراك سارية حاليًا</h2>
@@ -110,7 +117,6 @@
       <a href="index.html" class="btn btn-outline" style="display:block;">العودة لتسجيل الدخول</a>
     </div>
 
-    <!-- ============ خطوة 2: نموذج الاشتراك الكامل ============ -->
     <form id="sub-form" class="hidden-block">
 
       <div class="section-title">معلومات الموقع</div>
@@ -164,36 +170,34 @@
 
       <div class="section-title">وسيلة الدفع</div>
       <div class="pay-methods">
-        <div class="pay-method active" data-method="card">Visa / Mastercard</div>
-        <div class="pay-method disabled" data-method="zaincash">Zain Cash<small>قريبًا</small></div>
+        <div class="pay-method disabled" data-method="card">Visa / Mastercard<small>قريبًا</small></div>
+        <div class="pay-method active" data-method="transfer">تحويل مباشر</div>
       </div>
 
-      <div class="card-grid">
-        <div class="field full">
-          <label for="card-name">الاسم على البطاقة</label>
-          <input type="text" id="card-name" placeholder="بالأحرف اللاتينية كما بالبطاقة" autocomplete="off" />
-          <div class="field-error" id="err-card-name">الرجاء إدخال الاسم كما هو مكتوب على البطاقة.</div>
-        </div>
-        <div class="field full">
-          <label for="card-number">رقم البطاقة</label>
-          <input type="text" id="card-number" placeholder="0000 0000 0000 0000" inputmode="numeric" maxlength="19" autocomplete="off" />
-          <div class="field-error" id="err-card-number">رقم البطاقة غير صحيح.</div>
-        </div>
-        <div class="field">
-          <label for="card-expiry">تاريخ الانتهاء (شهر/سنة)</label>
-          <input type="text" id="card-expiry" placeholder="MM/YY" maxlength="5" autocomplete="off" />
-          <div class="field-error" id="err-card-expiry">تاريخ غير صحيح.</div>
-        </div>
-        <div class="field">
-          <label for="card-cvc">CVC / CVV</label>
-          <input type="text" id="card-cvc" placeholder="000" inputmode="numeric" maxlength="4" autocomplete="off" />
-          <div class="field-error" id="err-card-cvc">رمز غير صحيح.</div>
-        </div>
+      <div id="provider-methods" class="provider-methods">
+        <div class="provider-method active" data-provider="zaincash">زين كاش</div>
+        <div class="provider-method" data-provider="superkey">سوبر كي</div>
       </div>
 
-      <p style="font-size:11.5px;color:var(--ink-soft);margin:-6px 0 18px;">
-        🔒 بيانات بطاقتك تُستخدم فقط للتحقق الفوري من صحتها بمتصفحك، ولا تُرسَل أو تُخزَّن على سيرفراتنا نهائيًا — الدفع الفعلي يتم عبر بوابة دفع معتمدة (كي كارد).
-      </p>
+      <div id="transfer-box" class="transfer-box">
+        <img id="transfer-qr" class="qr" src="" alt="QR" />
+        <div class="wallet-copy-row">
+          <span class="num" id="transfer-wallet-number">—</span>
+          <button type="button" class="btn btn-outline" id="btn-copy-wallet">نسخ الرقم</button>
+        </div>
+        <div class="note">حوّل المبلغ المطلوب بالضبط، ثم أرفق إثبات العملية أدناه</div>
+      </div>
+
+      <div class="field">
+        <label for="transfer-screenshot">صورة إيصال التحويل (Screenshot)</label>
+        <input type="file" id="transfer-screenshot" accept="image/*" />
+        <div class="field-error" id="err-transfer-screenshot">الرجاء إرفاق صورة الإيصال (أو اسم العملية إن كان الخيار متاحًا).</div>
+      </div>
+
+      <div class="field hidden-block" id="reference-name-field">
+        <label for="transfer-reference">أو اسم/رقم العملية (بدلاً من الصورة)</label>
+        <input type="text" id="transfer-reference" placeholder="مثال: اسم العملية بتطبيق سوبر كي" autocomplete="off" />
+      </div>
 
       <div class="agree-block">
         <label class="agree-row">
@@ -210,12 +214,11 @@
       <button type="submit" class="btn btn-primary" id="sub-submit">اشتراك</button>
     </form>
 
-    <!-- ============ رسالة النجاح ============ -->
     <div id="success-section" class="hidden-block success-block">
-      <div class="glyph-ok">✓</div>
-      <h2 style="margin:0 0 8px;font-size:17px;">تم استلام طلب اشتراكك</h2>
+      <div class="glyph-ok">⏳</div>
+      <h2 style="margin:0 0 8px;font-size:17px;">جارٍ المراجعة</h2>
       <p style="margin:0 0 18px;color:var(--ink-soft);font-size:13.5px;">
-        سيتم تفعيل خطتك خلال وقت قصير بعد تأكيد استلام الدفعة من الإدارة. راح توصلك رسالة واتساب فور التفعيل.
+        تم استلام طلبك وهو الآن قيد المراجعة، يستغرق عادة من 10 إلى 15 دقيقة. سيتم تفعيل خطتك فور تأكيد استلام الدفعة.
       </p>
       <a href="index.html" class="btn btn-primary" style="display:block;">العودة لتسجيل الدخول</a>
     </div>
@@ -231,10 +234,6 @@
 <script src="js/config.js"></script>
 <script src="js/supabase-client.js"></script>
 <script>
-// =========================================================
-// منطق صفحة الاشتراك (مستقلة تمامًا، تتصل بـ Supabase مباشرة بنفس نمط
-// باقي صفحات المشروع — بدون أي اتصال بسيرفر ربط واتساب)
-// =========================================================
 function $(sel) { return document.querySelector(sel); }
 
 function toast(msg, kind = "") {
@@ -253,14 +252,13 @@ function showFieldError(inputEl, errorEl, show) {
   errorEl.classList.toggle("show", !!show);
 }
 
-let currentStore = null;       // صف المتجر بعد تسجيل الدخول
-let settings = null;           // إعدادات الأسعار من subscription_settings
-let selectedPlan = "month";    // month | year
-let appliedDiscount = null;    // { code, discount_type, discount_value } أو null
+let currentStore = null;
+let settings = null;
+let payMethods = null;
+let selectedPlan = "month";
+let selectedProvider = "zaincash";
+let appliedDiscount = null;
 
-// ---------------------------------------------------------
-// خطوة 1: التحقق من رقم الهاتف وكلمة المرور مقابل جدول stores
-// ---------------------------------------------------------
 $("#auth-form").addEventListener("submit", async (e) => {
   e.preventDefault();
   hideAlert();
@@ -283,7 +281,6 @@ $("#auth-form").addEventListener("submit", async (e) => {
 
     currentStore = store;
 
-    // هل عنده اشتراك مدفوع (غير مجاني) سارٍ فعليًا حتى الآن؟
     const today = new Date().toISOString().slice(0, 10);
     const hasActivePaidPlan = store.is_active && store.plan !== "free" && store.expires_at && store.expires_at >= today;
 
@@ -295,11 +292,14 @@ $("#auth-form").addEventListener("submit", async (e) => {
       return;
     }
 
-    // تحميل إعدادات الأسعار ثم إظهار نموذج الاشتراك
-    const settingsRows = await SB.select("subscription_settings", "id=eq.1&select=*");
+    const [settingsRows, payMethodsRows] = await Promise.all([
+      SB.select("subscription_settings", "id=eq.1&select=*"),
+      SB.select("payment_methods_settings", "id=eq.1&select=*"),
+    ]);
     settings = (settingsRows && settingsRows[0]) || { monthly_price: 15000, yearly_price: 170000 };
+    payMethods = (payMethodsRows && payMethodsRows[0]) || { direct_transfer_enabled: true, zaincash_enabled: true, superkey_enabled: true, card_enabled: false };
 
-    $("#card-name").value = "";
+    setupPaymentMethodsUI();
     updatePriceDisplay();
 
     $("#auth-form").classList.add("hidden-block");
@@ -313,23 +313,12 @@ $("#auth-form").addEventListener("submit", async (e) => {
   }
 });
 
-// ---------------------------------------------------------
-// اختيار نوع الاشتراك (شهري/سنوي)
-// ---------------------------------------------------------
 document.querySelectorAll(".plan-card").forEach(card => {
   card.addEventListener("click", () => {
     document.querySelectorAll(".plan-card").forEach(c => c.classList.remove("active"));
     card.classList.add("active");
     selectedPlan = card.dataset.plan;
     updatePriceDisplay();
-  });
-});
-
-document.querySelectorAll(".pay-method").forEach(m => {
-  m.addEventListener("click", () => {
-    if (m.classList.contains("disabled")) { toast("Zain Cash قريبًا، غير مفعّل حاليًا", "bad"); return; }
-    document.querySelectorAll(".pay-method").forEach(x => x.classList.remove("active"));
-    m.classList.add("active");
   });
 });
 
@@ -358,9 +347,6 @@ function updatePriceDisplay() {
   $("#total-price").textContent = fmtIQD(finalPrice());
 }
 
-// ---------------------------------------------------------
-// تطبيق كود الخصم
-// ---------------------------------------------------------
 $("#btn-apply-discount").addEventListener("click", async () => {
   const code = $("#sub-discount").value.trim();
   const msgEl = $("#discount-msg");
@@ -389,75 +375,77 @@ $("#btn-apply-discount").addEventListener("click", async () => {
   updatePriceDisplay();
 });
 
-// ---------------------------------------------------------
-// تنسيق حقل رقم البطاقة (مسافة كل 4 أرقام) + خوارزمية Luhn للتحقق الفوري
-// (بيانات البطاقة هذه لا تُرسَل ولا تُخزَّن في أي مكان — راجع الملاحظة بالنموذج)
-// ---------------------------------------------------------
-$("#card-number").addEventListener("input", (e) => {
-  let v = e.target.value.replace(/\D/g, "").slice(0, 19);
-  e.target.value = v.replace(/(.{4})/g, "$1 ").trim();
-});
+function setupPaymentMethodsUI() {
+  const cardBtn = document.querySelector('.pay-method[data-method="card"]');
+  cardBtn.classList.toggle("disabled", !payMethods.card_enabled);
+  cardBtn.querySelector("small").textContent = payMethods.card_enabled ? "" : "قريبًا";
 
-$("#card-expiry").addEventListener("input", (e) => {
-  let v = e.target.value.replace(/\D/g, "").slice(0, 4);
-  if (v.length > 2) v = `${v.slice(0, 2)}/${v.slice(2)}`;
-  e.target.value = v;
-});
+  const transferBtn = document.querySelector('.pay-method[data-method="transfer"]');
+  transferBtn.classList.toggle("disabled", !payMethods.direct_transfer_enabled);
 
-function luhnValid(numStr) {
-  const digits = numStr.replace(/\D/g, "");
-  if (digits.length < 12) return false;
-  let sum = 0, alt = false;
-  for (let i = digits.length - 1; i >= 0; i--) {
-    let d = parseInt(digits[i], 10);
-    if (alt) { d *= 2; if (d > 9) d -= 9; }
-    sum += d;
-    alt = !alt;
-  }
-  return sum % 10 === 0;
+  const zcBtn = document.querySelector('.provider-method[data-provider="zaincash"]');
+  const skBtn = document.querySelector('.provider-method[data-provider="superkey"]');
+  zcBtn.classList.toggle("hidden-block", !payMethods.zaincash_enabled);
+  skBtn.classList.toggle("hidden-block", !payMethods.superkey_enabled);
+
+  selectedProvider = payMethods.zaincash_enabled ? "zaincash" : (payMethods.superkey_enabled ? "superkey" : null);
+  document.querySelectorAll(".provider-method").forEach(b => b.classList.toggle("active", b.dataset.provider === selectedProvider));
+  renderTransferBox();
 }
 
-function expiryValid(mmYY) {
-  const m = /^(\d{2})\/(\d{2})$/.exec(mmYY);
-  if (!m) return false;
-  const month = parseInt(m[1], 10);
-  const year = 2000 + parseInt(m[2], 10);
-  if (month < 1 || month > 12) return false;
-  const now = new Date();
-  const expiry = new Date(year, month, 0); // آخر يوم بالشهر المكتوب
-  return expiry >= new Date(now.getFullYear(), now.getMonth(), 1);
+document.querySelectorAll(".pay-method").forEach(m => {
+  m.addEventListener("click", () => {
+    if (m.classList.contains("disabled")) { toast("هذه الوسيلة غير مفعّلة حاليًا", "bad"); return; }
+  });
+});
+
+document.querySelectorAll(".provider-method").forEach(m => {
+  m.addEventListener("click", () => {
+    if (m.classList.contains("disabled") || m.classList.contains("hidden-block")) return;
+    document.querySelectorAll(".provider-method").forEach(x => x.classList.remove("active"));
+    m.classList.add("active");
+    selectedProvider = m.dataset.provider;
+    renderTransferBox();
+  });
+});
+
+function renderTransferBox() {
+  const qrUrl = selectedProvider === "superkey" ? payMethods.superkey_qr_url : payMethods.zaincash_qr_url;
+  const walletNum = selectedProvider === "superkey" ? payMethods.superkey_wallet_number : payMethods.zaincash_wallet_number;
+  $("#transfer-qr").src = qrUrl || "";
+  $("#transfer-wallet-number").textContent = walletNum || "—";
+  $("#reference-name-field").classList.toggle("hidden-block", selectedProvider !== "superkey");
 }
 
-// ---------------------------------------------------------
-// إرسال طلب الاشتراك
-// ---------------------------------------------------------
+$("#btn-copy-wallet").addEventListener("click", () => {
+  const num = $("#transfer-wallet-number").textContent;
+  if (!num || num === "—") return;
+  navigator.clipboard.writeText(num).then(() => toast("تم نسخ الرقم", "ok")).catch(() => toast("تعذر النسخ", "bad"));
+});
+
 $("#sub-form").addEventListener("submit", async (e) => {
   e.preventDefault();
 
   const governorate = $("#sub-governorate").value;
   const area = $("#sub-area").value.trim();
-  const cardName = $("#card-name").value.trim();
-  const cardNumber = $("#card-number").value;
-  const cardExpiry = $("#card-expiry").value;
-  const cardCvc = $("#card-cvc").value.trim();
+  const screenshotFile = $("#transfer-screenshot").files[0];
+  const referenceName = $("#transfer-reference").value.trim();
   const agreePrivacy = $("#sub-agree-privacy").checked;
   const agreeTerms = $("#sub-agree-terms").checked;
 
   let hasError = false;
   showFieldError($("#sub-governorate"), $("#err-governorate"), false);
   showFieldError($("#sub-area"), $("#err-area"), false);
-  showFieldError($("#card-name"), $("#err-card-name"), false);
-  showFieldError($("#card-number"), $("#err-card-number"), false);
-  showFieldError($("#card-expiry"), $("#err-card-expiry"), false);
-  showFieldError($("#card-cvc"), $("#err-card-cvc"), false);
+  showFieldError($("#transfer-screenshot"), $("#err-transfer-screenshot"), false);
   $("#err-sub-agree").classList.remove("show");
 
   if (!governorate) { showFieldError($("#sub-governorate"), $("#err-governorate"), true); hasError = true; }
   if (!area) { showFieldError($("#sub-area"), $("#err-area"), true); hasError = true; }
-  if (cardName.length < 3) { showFieldError($("#card-name"), $("#err-card-name"), true); hasError = true; }
-  if (!luhnValid(cardNumber)) { showFieldError($("#card-number"), $("#err-card-number"), true); hasError = true; }
-  if (!expiryValid(cardExpiry)) { showFieldError($("#card-expiry"), $("#err-card-expiry"), true); hasError = true; }
-  if (!/^\d{3,4}$/.test(cardCvc)) { showFieldError($("#card-cvc"), $("#err-card-cvc"), true); hasError = true; }
+  if (!selectedProvider) { toast("لا توجد وسيلة تحويل مفعّلة حاليًا، تواصل مع الإدارة", "bad"); hasError = true; }
+
+  const hasProof = screenshotFile || (selectedProvider === "superkey" && referenceName);
+  if (!hasProof) { showFieldError($("#transfer-screenshot"), $("#err-transfer-screenshot"), true); hasError = true; }
+
   if (!agreePrivacy || !agreeTerms) { $("#err-sub-agree").classList.add("show"); hasError = true; }
 
   if (hasError) return;
@@ -467,9 +455,13 @@ $("#sub-form").addEventListener("submit", async (e) => {
   btn.textContent = "جارٍ الإرسال...";
 
   try {
-    // ملاحظة: cardNumber / cardExpiry / cardCvc تُستخدم للتحقق المحلي فقط
-    // أعلاه (Luhn + تاريخ الانتهاء) ولا تدخل هذا الطلب نهائيًا — لا تُخزَّن
-    // ولا تُرسَل لأي سيرفر، التزامًا بمعيار PCI-DSS (راجع تعليق ملف SQL).
+    let screenshotUrl = null;
+    if (screenshotFile) {
+      const ext = (screenshotFile.name.split(".").pop() || "jpg").toLowerCase();
+      const path = `screenshots/${currentStore.phone}-${Date.now()}.${ext}`;
+      screenshotUrl = await SB.uploadFile("payment-uploads", path, screenshotFile);
+    }
+
     await SB.insert("subscribe", {
       phone: currentStore.phone,
       full_name: currentStore.full_name || currentStore.store_name,
@@ -480,8 +472,16 @@ $("#sub-form").addEventListener("submit", async (e) => {
       price: finalPrice(),
       discount_code: appliedDiscount ? appliedDiscount.code : null,
       discount_amount: appliedDiscount ? (basePrice() - finalPrice()) : 0,
-      status: "pending", // يفعّله الأدمن يدويًا من لوحة التحكم بعد تأكيد استلام الدفعة
+      payment_method: selectedProvider,
+      transfer_screenshot_url: screenshotUrl,
+      transfer_reference_name: referenceName || null,
+      status: "pending",
     });
+
+    fetch(`${LINK_SERVER.baseUrl}/api/notify/new-subscription`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json", "x-link-secret": LINK_SERVER.secret },
+    }).catch(err => console.error("تعذر إرسال إشعار تيليغرام:", err));
 
     $("#sub-form").classList.add("hidden-block");
     $("#success-section").classList.remove("hidden-block");
