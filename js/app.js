@@ -1,1225 +1,2494 @@
-<!DOCTYPE html>
-<html lang="ar" dir="rtl">
-<head>
-<meta charset="UTF-8" />
-<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1" />
-<title>لوحة تحكم متاجر واتساب</title>
-<link rel="stylesheet" href="assets/style.css" />
-<style>
-  .sub-plan-badge {
-    border-radius: var(--radius-m, 14px); padding: 26px 20px; text-align: center; color: #fff;
-    max-width: 320px; box-shadow: 0 8px 22px rgba(0,0,0,.12);
+// =========================================================
+// منطق التطبيق الكامل
+// =========================================================
+
+const state = {
+  session: null,      // { role: 'admin'|'store', data: {...} }
+  stores: [],
+  orders: [],
+  complaints: [],
+  announcements: [],
+  apiSettings: {},
+  productsDraft: [],  // منتجات مؤقتة أثناء تعديل/إضافة متجر (لوحة الأدمن)
+  editingStoreId: null,
+  ordersFilter: "all",
+  waPollTimer: null,  // مؤقت فحص حالة ربط واتساب (لوحة المتجر)
+  adminWaPollTimer: null, // مؤقت تحديث شارات الربط بلوحة الأدمن
+  ordersPollTimer: null,  // مؤقت تحديث سجل الطلبات تلقائيًا (لوحة المتجر)
+  products: [],        // منتجات متجر التاجر الحالي (تبويب المنتجات)
+  productsFilter: "all",
+  productCategoryFilter: "",
+  editingProductId: null,
+  aiPool: [],           // مفاتيح الذكاء الاصطناعي الاحتياطية (لوحة الأدمن فقط)
+  channelGlobalSettings: [], // إعداد كل قناة العام (لوحة الأدمن): [{channel, visibility, status}]
+  channelOverrides: [],      // استثناءات لمتاجر محددة (لوحة الأدمن): [{store_id, channel, visibility, status}]
+  channelOverrideModalChannel: null, // القناة المفتوح لها مودال الاستثناءات حاليًا
+  channelEffective: {},      // الحالة الفعلية لكل قناة لمتجر التاجر الحالي بعد دمج العام+الاستثناء
+  subscribeRequests: [],     // صفوف جدول subscribe (طلبات/معاملات الاشتراك المدفوع - تبويب الاشتراكات بلوحة الأدمن)
+  subscriptionSettings: { monthly_price: 15000, yearly_price: 170000 },
+  discountCodes: [],
+  paymentMethods: { card_enabled: false, direct_transfer_enabled: true, zaincash_enabled: true, superkey_enabled: true },
+  waAdminSenderPollTimer: null, // مؤقت فحص حالة ربط رقم إرسال الأدمن (رسائل واتساب)
+  waAdminBulkPollTimer: null,   // مؤقت متابعة تقدّم الإرسال الجماعي
+  otpAdminSenderPollTimer: null, // مؤقت فحص حالة ربط رقم إرسال رموز التحقق (OTP)
+};
+
+// ---------------------------------------------------------
+// أدوات مساعدة عامة
+// ---------------------------------------------------------
+function $(sel, root = document) { return root.querySelector(sel); }
+function $all(sel, root = document) { return [...root.querySelectorAll(sel)]; }
+
+function toast(msg, kind = "") {
+  const host = $("#toast-host");
+  const el = document.createElement("div");
+  el.className = `toast ${kind}`;
+  el.textContent = msg;
+  host.appendChild(el);
+  setTimeout(() => el.remove(), 3200);
+}
+
+function fmtTime(iso) {
+  if (!iso) return "—";
+  const d = new Date(iso);
+  return d.toLocaleString("ar-IQ", { day: "2-digit", month: "2-digit", year: "numeric", hour: "2-digit", minute: "2-digit" });
+}
+
+// تنسيق سنة/شهر/يوم فقط (يُستخدم بجدول الطلبات والطباعة حسب الطلب)
+function fmtDate(iso) {
+  if (!iso) return "—";
+  const d = new Date(iso);
+  const y = d.getFullYear();
+  const m = String(d.getMonth() + 1).padStart(2, "0");
+  const day = String(d.getDate()).padStart(2, "0");
+  return `${y}/${m}/${day}`;
+}
+
+// تنسيق السعر مع الخصم بين قوسين إن وُجد
+function fmtPrice(unitPrice, discountPercent) {
+  if (unitPrice === null || unitPrice === undefined || unitPrice === "") return "—";
+  const price = Number(unitPrice).toLocaleString("ar-IQ");
+  if (discountPercent && Number(discountPercent) > 0) {
+    return `${price} (خصم ${Number(discountPercent)}%)`;
   }
-  .sub-badge-free  { background: linear-gradient(135deg, #6b7280, #9ca3af); }
-  .sub-badge-month { background: linear-gradient(135deg, #1f5f4f, #2f8f76); }
-  .sub-badge-year  { background: linear-gradient(135deg, #b8860b, #f0c419); }
-  .sub-badge-icon { font-size: 30px; margin-bottom: 6px; }
-  .sub-badge-label { font-size: 20px; font-weight: 900; margin-bottom: 8px; }
-  .sub-badge-price { font-family: var(--font-mono); font-size: 16px; font-weight: 800; opacity: .95; margin-bottom: 10px; }
-  .sub-badge-dates { font-size: 12.5px; font-weight: 600; opacity: .9; line-height: 1.8; }
-</style>
-</head>
-<body>
+  return price;
+}
 
-<!-- =========================================================
-     شاشة تسجيل الدخول
-========================================================= -->
-<div id="screen-login" class="screen active">
-  <div class="login-wrap">
-    <div class="login-card">
-      <div class="brand-mark">
-        <div class="glyph">وب</div>
-        <div class="text">
-          <h1>لوحة متاجر واتساب</h1>
-          <p>تسجيل الدخول للمتابعة</p>
-        </div>
+// مكان الطلب: يجمع بين نوع القناة والاسم الفعلي المخزّن وقت الطلب
+const CHANNEL_LABELS = { whatsapp: "واتساب", messenger: "ماسنجر", instagram: "انستغرام" };
+function fmtOrderPlace(order) {
+  const label = CHANNEL_LABELS[order.type] || order.type || "—";
+  return order.channel_name ? `${label} — ${escapeHtml(order.channel_name)}` : label;
+}
+
+function statusBadge(status) {
+  const map = {
+    pending: { c: "wait", t: "بالانتظار" },
+    completed: { c: "ok", t: "منجز" },
+    cancelled: { c: "bad", t: "ملغي" },
+  };
+  const s = map[status] || map.pending;
+  return `<span class="badge ${s.c}">${s.t}</span>`;
+}
+
+function showScreen(id) {
+  $all(".screen").forEach(s => s.classList.remove("active"));
+  $(`#${id}`).classList.add("active");
+}
+
+function switchTab(prefix, tabId, navRoot) {
+  $all(`#${navRoot} .nav-item`).forEach(b => b.classList.toggle("active", b.dataset.tab === tabId));
+  $all(".tab-panel").forEach(p => {
+    if (p.id.startsWith(`tab-${prefix}`)) p.classList.add("hidden");
+  });
+  $(`#tab-${tabId}`)?.classList.remove("hidden");
+}
+
+// ---------------------------------------------------------
+// التحقق من صحة رقم الهاتف: يبدأ بـ 07 و 11 رقم بالضبط
+// ---------------------------------------------------------
+function validatePhone(phone) {
+  const p = (phone || "").trim();
+  if (!/^\d+$/.test(p)) return { valid: false, msg: "رقم الهاتف يجب أن يتكوّن من أرقام فقط." };
+  if (!p.startsWith("07")) return { valid: false, msg: "رقم الهاتف يجب أن يبدأ بـ 07." };
+  if (p.length !== 11) return { valid: false, msg: "رقم الهاتف يجب أن يتكوّن من 11 رقمًا بالضبط." };
+  return { valid: true };
+}
+
+// ---------------------------------------------------------
+// تسجيل الدخول
+// ---------------------------------------------------------
+function showLoginAlert(msg) {
+  const a = $("#login-alert");
+  a.innerHTML = msg; // قد يحتوي رابط "من هنا" عند انتهاء الاشتراك
+  a.classList.add("show");
+}
+function hideLoginAlert() { $("#login-alert").classList.remove("show"); }
+
+$("#login-phone").addEventListener("input", () => {
+  $("#login-phone").classList.remove("err");
+  $("#phone-error").classList.remove("show");
+});
+
+$("#login-form").addEventListener("submit", async (e) => {
+  e.preventDefault();
+  hideLoginAlert();
+
+  const phone = $("#login-phone").value.trim();
+  const password = $("#login-password").value;
+
+  const v = validatePhone(phone);
+  if (!v.valid) {
+    $("#login-phone").classList.add("err");
+    $("#phone-error").textContent = v.msg;
+    $("#phone-error").classList.add("show");
+    return;
+  }
+
+  const btn = $("#login-submit");
+  btn.disabled = true;
+  btn.textContent = "جارٍ التحقق...";
+
+  try {
+    // 1) البحث أولاً برقم الهاتف فقط في جدول stores (بغض النظر عن كلمة المرور)
+    //    حتى نستطيع تمييز حالة "الرقم صحيح لكن كلمة المرور خاطئة" عن "الاشتراك منتهي"
+    const storeByPhone = await SB.select("stores", `phone=eq.${encodeURIComponent(phone)}&select=*`);
+
+    if (storeByPhone.length > 0) {
+      const store = storeByPhone[0];
+      if (store.password !== password) {
+        showLoginAlert("رقم الهاتف أو كلمة المرور غير صحيحة.");
+        return;
+      }
+      if (store.is_active !== true) {
+        showLoginAlert(
+          `عذراً انتهت مهلة الاشتراك، قم بتجديد الخطة <a href="${RENEW_SUBSCRIPTION_URL}" target="_blank" rel="noopener">من هنا</a>`
+        );
+        return;
+      }
+      state.session = { role: "store", data: store };
+      localStorage.setItem("wb_session", JSON.stringify(state.session));
+      await enterStore();
+      return;
+    }
+
+    // 2) إذا لم يوجد الرقم إطلاقًا بجدول stores، يبحث في جدول الأدمن
+    const adminRows = await SB.select("admins", `phone=eq.${encodeURIComponent(phone)}&password=eq.${encodeURIComponent(password)}&select=*`);
+    if (adminRows.length === 0) {
+      showLoginAlert("الرقم غير مسجل في النظام.");
+    } else {
+      state.session = { role: "admin", data: adminRows[0] };
+      localStorage.setItem("wb_session", JSON.stringify(state.session));
+      await enterAdmin();
+    }
+  } catch (err) {
+    console.error(err);
+    showLoginAlert("تعذر الاتصال بقاعدة البيانات. تحقق من إعدادات Supabase في js/config.js");
+  } finally {
+    btn.disabled = false;
+    btn.textContent = "دخول";
+  }
+});
+
+function logout() {
+  state.session = null;
+  localStorage.removeItem("wb_session");
+  stopWaPolling();
+  stopOrdersPolling();
+  if (state.adminWaPollTimer) { clearInterval(state.adminWaPollTimer); state.adminWaPollTimer = null; }
+  stopWaAdminSenderPolling();
+  stopWaAdminBulkPolling();
+  stopOtpAdminSenderPolling();
+  $("#login-form").reset();
+  showScreen("screen-login");
+}
+$("#admin-logout").addEventListener("click", logout);
+$("#store-logout").addEventListener("click", logout);
+
+// استعادة الجلسة عند إعادة فتح الصفحة
+(async function restoreSession() {
+  const raw = localStorage.getItem("wb_session");
+  if (!raw) return;
+  try {
+    const sess = JSON.parse(raw);
+    state.session = sess;
+    if (sess.role === "admin") await enterAdmin();
+    else await enterStore();
+  } catch {
+    localStorage.removeItem("wb_session");
+  }
+})();
+
+// ---------------------------------------------------------
+// قائمة الجوال (سايدبار) - فتح/إغلاق
+// ---------------------------------------------------------
+function wireMobileMenu(toggleId, sidebarId, scrimId) {
+  const toggle = $(`#${toggleId}`), sidebar = $(`#${sidebarId}`), scrim = $(`#${scrimId}`);
+  toggle?.addEventListener("click", () => { sidebar.classList.add("open"); scrim.classList.add("show"); });
+  scrim?.addEventListener("click", () => { sidebar.classList.remove("open"); scrim.classList.remove("show"); });
+  $all(`#${sidebarId} .nav-item`).forEach(b => b.addEventListener("click", () => {
+    sidebar.classList.remove("open"); scrim.classList.remove("show");
+  }));
+}
+wireMobileMenu("admin-menu-toggle", "admin-sidebar", "admin-scrim");
+wireMobileMenu("store-menu-toggle", "store-sidebar", "store-scrim");
+
+// =========================================================
+// ============  قسم لوحة المشرف (Admin)  ===================
+// =========================================================
+
+async function enterAdmin() {
+  showScreen("screen-admin");
+  $("#admin-name-label").textContent = state.session.data.full_name || "المشرف العام";
+  await loadAdminData();
+  renderAdminOverview();
+  renderStoresGrid();
+  renderSubscriptionsTab();
+  renderChannelsTab();
+  renderApiSettingsTab();
+  renderAnnouncementsTab();
+  renderComplaintsTab();
+  refreshAdminComplaintsBadge();
+  initWaMessagesTab();
+
+  if (state.adminWaPollTimer) clearInterval(state.adminWaPollTimer);
+  state.adminWaPollTimer = setInterval(refreshAdminWaBadges, 8000);
+}
+
+async function loadAdminData() {
+  try {
+    const [stores, orders, complaints, announcements, apiRows, aiPool, channelSettings, channelOverrides, subscribeRows, subSettingsRows, discountCodes, payMethodsRows] = await Promise.all([
+      SB.select("stores", "select=*&order=created_at.desc"),
+      SB.select("orders", "select=*&order=created_at.desc&limit=2000"),
+      SB.select("complaints", "select=*&order=created_at.desc"),
+      SB.select("announcements", "select=*&order=created_at.desc"),
+      SB.select("api_settings", "select=*"),
+      SB.select("ai_provider_pool", "select=*&order=priority.asc"),
+      SB.select("channel_global_settings", "select=*"),
+      SB.select("channel_store_overrides", "select=*"),
+      SB.select("subscribe", "select=*&order=created_at.desc"),
+      SB.select("subscription_settings", "id=eq.1&select=*"),
+      SB.select("discount_codes", "select=*&order=created_at.desc"),
+      SB.select("payment_methods_settings", "id=eq.1&select=*"),
+    ]);
+    state.stores = stores;
+    state.orders = orders;
+    state.complaints = complaints;
+    state.announcements = announcements;
+    state.apiSettings = {};
+    apiRows.forEach(r => state.apiSettings[r.key_name] = r.key_value);
+    state.aiPool = aiPool;
+    state.channelGlobalSettings = channelSettings;
+    state.channelOverrides = channelOverrides;
+    state.subscribeRequests = subscribeRows;
+    state.subscriptionSettings = (subSettingsRows && subSettingsRows[0]) || { monthly_price: 15000, yearly_price: 170000 };
+    state.discountCodes = discountCodes;
+    state.paymentMethods = (payMethodsRows && payMethodsRows[0]) || {
+      card_enabled: false, direct_transfer_enabled: true, zaincash_enabled: true, superkey_enabled: true,
+      zaincash_qr_url: null, zaincash_wallet_number: "", superkey_qr_url: null, superkey_wallet_number: "",
+    };
+  } catch (err) {
+    console.error(err);
+    toast("خطأ في تحميل بيانات لوحة المشرف", "bad");
+  }
+}
+
+$all(".nav-item[data-tab^='a-']").forEach(btn => {
+  btn.addEventListener("click", () => {
+    switchTab("a", btn.dataset.tab, "admin-sidebar");
+    if (btn.dataset.tab === "a-complaints") markAdminComplaintsSeen();
+  });
+});
+$all("[data-goto]").forEach(btn => {
+  btn.addEventListener("click", () => {
+    const tab = btn.dataset.goto;
+    switchTab("a", tab, "admin-sidebar");
+    $all(`#admin-sidebar .nav-item`).forEach(b => b.classList.toggle("active", b.dataset.tab === tab));
+    if (tab === "a-complaints") markAdminComplaintsSeen();
+  });
+});
+
+function renderAdminOverview() {
+  const totalStores = state.stores.length;
+  const activeStores = state.stores.filter(s => s.status === "active").length;
+  const totalOrders = state.orders.length;
+  const pending = state.orders.filter(o => o.status === "pending").length;
+  const completed = state.orders.filter(o => o.status === "completed").length;
+  const cancelled = state.orders.filter(o => o.status === "cancelled").length;
+
+  $("#admin-stats").innerHTML = `
+    <div class="stat-card palm"><div class="num">${totalStores}</div><div class="lbl">إجمالي المتاجر</div></div>
+    <div class="stat-card ok"><div class="num">${activeStores}</div><div class="lbl">متاجر نشطة</div></div>
+    <div class="stat-card"><div class="num">${totalOrders}</div><div class="lbl">إجمالي الطلبات</div></div>
+    <div class="stat-card wait"><div class="num">${pending}</div><div class="lbl">بالانتظار</div></div>
+    <div class="stat-card ok"><div class="num">${completed}</div><div class="lbl">منجزة</div></div>
+    <div class="stat-card bad"><div class="num">${cancelled}</div><div class="lbl">ملغاة</div></div>
+  `;
+
+  const recent = state.stores.slice(0, 4);
+  $("#admin-recent-stores").innerHTML = recent.length
+    ? recent.map(storeCardHtml).join("")
+    : `<div class="empty-state"><div class="glyph">▤</div><p>لا توجد متاجر مضافة بعد</p></div>`;
+  wireStoreCardButtons("#admin-recent-stores");
+}
+
+function storeOrderCount(storeId) {
+  return state.orders.filter(o => o.store_id === storeId).length;
+}
+
+function storeCardHtml(s) {
+  const orderCount = storeOrderCount(s.id);
+  const planLabel = { free: "مجانية", month: "شهرية", year: "سنوية" }[s.plan] || s.plan || "—";
+  return `
+  <div class="store-card" data-id="${s.id}">
+    <div class="top">
+      <div>
+        <h4>${escapeHtml(s.store_name)}</h4>
+        <div class="meta">${escapeHtml(s.phone)}</div>
       </div>
+      <span class="status-dot ${s.status === 'active' ? 'active' : 'suspended'}" title="${s.status === 'active' ? 'نشط' : 'موقوف'}"></span>
+    </div>
+    <div class="stat-line">
+      <span>الطلبات: <b>${orderCount}</b></span>
+      <span>البوت: <b style="font-family:var(--font-mono)">${escapeHtml(s.ai_phone || '—')}</b></span>
+    </div>
+    <div class="stat-line">
+      <span>الخطة: <b>${planLabel}</b></span>
+      <span>${s.is_active
+        ? `<span class="badge ok">ساري حتى ${escapeHtml(s.expires_at || '—')}</span>`
+        : `<span class="badge bad">منتهي</span>`}</span>
+    </div>
+    <div>
+      ${s.whatsapp_connected
+        ? `<span class="badge ok">مربوط واتساب${s.whatsapp_connected_number ? ' — ' + escapeHtml(s.whatsapp_connected_number) : ''}</span>`
+        : `<span class="badge bad">غير مربوط واتساب</span>`}
+    </div>
+    <div class="actions">
+      <button class="btn btn-outline btn-sm" data-edit-store="${s.id}">تعديل</button>
+      <button class="btn btn-outline btn-sm" data-view-channels="${s.id}">القنوات</button>
+      <button class="btn btn-outline btn-sm" data-view-customers="${s.id}">الزبائن</button>
+      <button class="btn btn-bad btn-sm" data-delete-store="${s.id}">حذف</button>
+    </div>
+  </div>`;
+}
 
-      <div class="login-alert" id="login-alert"></div>
+function escapeHtml(str) {
+  if (str === null || str === undefined) return "";
+  return String(str).replace(/[&<>"']/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
+}
 
-      <form id="login-form">
-        <div class="field">
-          <label for="login-phone">رقم الهاتف</label>
-          <input type="tel" id="login-phone" placeholder="07xxxxxxxxx" inputmode="numeric" autocomplete="off" />
-          <div class="field-error" id="phone-error">رقم الهاتف يجب أن يبدأ بـ 07 ويتكون من 11 رقم بالضبط.</div>
-        </div>
-        <div class="field">
-          <label for="login-password">كلمة المرور</label>
-          <input type="password" id="login-password" placeholder="••••••••" autocomplete="off" />
-        </div>
-        <button type="submit" class="btn btn-primary" id="login-submit">دخول</button>
-      </form>
+function renderStoresGrid() {
+  $("#stores-count-label").textContent = `${state.stores.length} متجر`;
+  const q = ($("#store-search").value || "").trim().toLowerCase();
+  const filtered = state.stores.filter(s =>
+    !q || s.store_name.toLowerCase().includes(q) || (s.phone || "").includes(q)
+  );
+  $("#stores-grid").innerHTML = filtered.length
+    ? filtered.map(storeCardHtml).join("")
+    : `<div class="empty-state"><div class="glyph">▤</div><p>لا توجد نتائج مطابقة</p></div>`;
+  wireStoreCardButtons("#stores-grid");
+}
+$("#store-search").addEventListener("input", renderStoresGrid);
 
-      <div class="login-foot">
-        جميع الحسابات مسجّلة مسبقًا من قِبل المشرف
-        <div style="margin-top:8px;">
-          لا تمتلك حساب؟
-          <a href="register.html" style="color:var(--palm-deep);text-decoration:underline;font-weight:800;">تسجيل جديد</a>
-        </div>
+function wireStoreCardButtons(scopeSel) {
+  $all(`${scopeSel} [data-edit-store]`).forEach(b => b.addEventListener("click", () => openStoreModal(b.dataset.editStore)));
+  $all(`${scopeSel} [data-delete-store]`).forEach(b => b.addEventListener("click", () => deleteStore(b.dataset.deleteStore)));
+  $all(`${scopeSel} [data-view-customers]`).forEach(b => b.addEventListener("click", () => openCustomersModal(b.dataset.viewCustomers)));
+  $all(`${scopeSel} [data-view-channels]`).forEach(b => b.addEventListener("click", () => openChannelsModal(b.dataset.viewChannels)));
+}
+
+// ---- تعديل متجر فقط (لا إضافة — الإنشاء يتم حصرًا عبر register.html) ----
+
+function openStoreModal(storeId) {
+  if (!storeId) return; // لا يوجد وضع "إضافة" — الإنشاء حصرًا عبر register.html
+  state.editingStoreId = storeId;
+  const modal = $("#modal-store");
+  const s = state.stores.find(x => x.id === storeId);
+  if (!s) return;
+
+  $("#store-modal-title").textContent = "تعديل المتجر";
+  $("#f-store-name").value = s.store_name || "";
+  $("#f-full-name").value = s.full_name || "";
+  $("#f-store-phone").value = s.phone || "";
+  $("#f-store-password").value = s.password || "";
+  $("#f-ai-phone").value = s.ai_phone || "";
+  $("#f-status").value = s.status || "active";
+  $("#f-barcode").value = s.barcode_data || s.whatsapp_link || "";
+  $("#f-notes").value = s.notes || "";
+  $("#f-plan").value = s.plan || "free";
+  $("#f-is-active").value = String(s.is_active !== false);
+  $("#f-expires-at").value = s.expires_at || "";
+
+  state.productsDraft = [];
+  renderProductsDraft();
+  loadStoreProducts(s.id);
+
+  modal.classList.add("show");
+}
+
+async function loadStoreProducts(storeId) {
+  try {
+    const rows = await SB.select("products", `store_id=eq.${storeId}&select=*&order=created_at.asc`);
+    state.productsDraft = rows;
+    renderProductsDraft();
+  } catch (err) { console.error(err); }
+}
+
+function renderProductsDraft() {
+  const host = $("#products-list");
+  if (state.productsDraft.length === 0) {
+    host.innerHTML = `<div class="empty-state" style="padding:24px;"><p>لا توجد منتجات مضافة بعد</p></div>`;
+    return;
+  }
+  host.innerHTML = state.productsDraft.map((p, i) => `
+    <div class="mini-product">
+      <div class="info">
+        <b>${escapeHtml(p.name || "منتج بدون اسم")}</b>
+        <span>${p.price ? p.price + " د.ع" : "بدون سعر"}</span>
+      </div>
+      <div class="row-actions">
+        <button class="btn btn-outline btn-sm" data-edit-prod="${i}">تعديل</button>
+        <button class="btn btn-bad btn-sm" data-del-prod="${i}">حذف</button>
       </div>
     </div>
-  </div>
-</div>
+  `).join("");
+  $all("#products-list [data-edit-prod]").forEach(b => b.addEventListener("click", () => editProductRow(+b.dataset.editProd)));
+  $all("#products-list [data-del-prod]").forEach(b => b.addEventListener("click", () => {
+    state.productsDraft.splice(+b.dataset.delProd, 1);
+    renderProductsDraft();
+  }));
+}
 
-<!-- =========================================================
-     شاشة لوحة المشرف (الأدمن)
-========================================================= -->
-<div id="screen-admin" class="screen">
-  <div class="mobile-topbar">
-    <div style="display:flex;align-items:center;gap:10px;">
-      <div class="glyph">وب</div>
-      <b>لوحة المشرف</b>
-    </div>
-    <button id="admin-menu-toggle">☰</button>
-  </div>
-  <div class="sidebar-scrim" id="admin-scrim"></div>
+$("#btn-add-product-row").addEventListener("click", () => {
+  const name = prompt("اسم المنتج:");
+  if (!name) return;
+  const priceStr = prompt("سعر المنتج (اختياري):", "");
+  const description = prompt("وصف المنتج (اختياري):", "");
+  state.productsDraft.push({ name, price: priceStr ? Number(priceStr) : null, description: description || "" });
+  renderProductsDraft();
+});
 
-  <div class="app-shell">
-    <aside class="sidebar" id="admin-sidebar">
-      <div class="brand-mark">
-        <div class="glyph">وب</div>
-        <div class="text">
-          <h1>لوحة المشرف</h1>
-          <p>إدارة كاملة للنظام</p>
-        </div>
+function editProductRow(index) {
+  const p = state.productsDraft[index];
+  const name = prompt("اسم المنتج:", p.name || "");
+  if (name === null) return;
+  const priceStr = prompt("سعر المنتج:", p.price ?? "");
+  const description = prompt("وصف المنتج:", p.description || "");
+  state.productsDraft[index] = { ...p, name, price: priceStr ? Number(priceStr) : null, description: description || "" };
+  renderProductsDraft();
+}
+
+$all("[data-close]").forEach(b => b.addEventListener("click", () => {
+  $(`#${b.dataset.close}`).classList.remove("show");
+}));
+
+// تمديد سريع: يضيف 30 يومًا لتاريخ النفاذ الحالي (أو من اليوم إن كان منتهيًا) ويعيد التفعيل
+$("#btn-extend-30").addEventListener("click", () => {
+  const current = $("#f-expires-at").value;
+  const base = current && new Date(current) > new Date() ? new Date(current) : new Date();
+  base.setDate(base.getDate() + 30);
+  const y = base.getFullYear(), m = String(base.getMonth() + 1).padStart(2, "0"), d = String(base.getDate()).padStart(2, "0");
+  $("#f-expires-at").value = `${y}-${m}-${d}`;
+  $("#f-is-active").value = "true";
+  toast("جهّزنا تاريخ نفاذ جديد (+30 يوم) — اضغط حفظ المتجر لتثبيته", "ok");
+});
+
+$("#save-store-btn").addEventListener("click", async () => {
+  const store_name = $("#f-store-name").value.trim();
+  const full_name = $("#f-full-name").value.trim();
+  const phone = $("#f-store-phone").value.trim();
+  const password = $("#f-store-password").value;
+  const ai_phone = $("#f-ai-phone").value.trim();
+  const status = $("#f-status").value;
+  const barcode_data = $("#f-barcode").value.trim();
+  const notes = $("#f-notes").value.trim();
+  const plan = $("#f-plan").value;
+  const is_active = $("#f-is-active").value === "true";
+  const expires_at = $("#f-expires-at").value || null;
+
+  const v = validatePhone(phone);
+  if (!v.valid) { toast(v.msg, "bad"); return; }
+  if (!store_name) { toast("الرجاء إدخال اسم المتجر.", "bad"); return; }
+  if (!password) { toast("الرجاء إدخال كلمة المرور.", "bad"); return; }
+  if (!ai_phone) { toast("الرجاء إدخال رقم واتساب البوت المرتبط.", "bad"); return; }
+
+  const storeId = state.editingStoreId;
+  if (!storeId) { toast("لا يمكن إنشاء متجر جديد من هنا — التسجيل حصرًا عبر صفحة إنشاء حساب.", "bad"); return; }
+
+  // ملاحظة: تغيير "الخطة" هنا يعيد حساب تاريخ النفاذ ويعيد التفعيل تلقائيًا
+  // عبر trigger بقاعدة البيانات (نفس آلية "تمديد العضوية"). لتمديد بدون
+  // تغيير نوع الخطة، غيّر تاريخ النفاذ يدويًا من حقل "تاريخ نفاذ الاشتراك".
+  const payload = { store_name, full_name, phone, password, ai_phone, status, barcode_data, notes, plan, is_active, expires_at };
+
+  const btn = $("#save-store-btn");
+  btn.disabled = true; btn.textContent = "جارٍ الحفظ...";
+
+  try {
+    await SB.update("stores", `id=eq.${storeId}`, payload);
+
+    // مزامنة المنتجات: نحذف القديمة (بدون id ثابت من db) ونعيد الإدخال بشكل مبسط
+    const existing = await SB.select("products", `store_id=eq.${storeId}&select=id`);
+    const draftIds = new Set(state.productsDraft.filter(p => p.id).map(p => p.id));
+    const toDelete = existing.filter(e => !draftIds.has(e.id));
+    for (const d of toDelete) {
+      await SB.remove("products", `id=eq.${d.id}`);
+    }
+    for (const p of state.productsDraft) {
+      if (p.id) {
+        await SB.update("products", `id=eq.${p.id}`, { name: p.name, price: p.price, description: p.description });
+      } else {
+        await SB.insert("products", { store_id: storeId, name: p.name, price: p.price, description: p.description });
+      }
+    }
+
+    toast("تم حفظ المتجر بنجاح", "ok");
+    $("#modal-store").classList.remove("show");
+    await loadAdminData();
+    renderAdminOverview();
+    renderStoresGrid();
+    renderApiSettingsTab();
+  } catch (err) {
+    console.error(err);
+    toast("تعذر حفظ المتجر. تحقق من رقم الهاتف (يجب أن يكون فريدًا).", "bad");
+  } finally {
+    btn.disabled = false; btn.textContent = "حفظ المتجر";
+  }
+});
+
+async function deleteStore(id) {
+  if (!confirm("هل أنت متأكد من حذف هذا المتجر؟ سيتم حذف منتجاته أيضًا.")) return;
+  try {
+    await SB.remove("stores", `id=eq.${id}`);
+    toast("تم حذف المتجر", "ok");
+    await loadAdminData();
+    renderAdminOverview();
+    renderStoresGrid();
+  } catch (err) {
+    console.error(err);
+    toast("تعذر حذف المتجر", "bad");
+  }
+}
+
+// ---- عرض القنوات المتصلة/غير المتصلة لمتجر معين من لوحة الأدمن ----
+// (يعتمد على METACHANNEL_LABELS المُعرّف أدناه بنفس الملف)
+
+async function openChannelsModal(storeId) {
+  const s = state.stores.find(x => x.id === storeId);
+  if (!s) return;
+  $("#channels-modal-title").textContent = `قنوات متجر: ${s.store_name}`;
+  $("#admin-channels-body").innerHTML = `<div class="empty-state" style="padding:24px;"><p>جارٍ التحميل...</p></div>`;
+  $("#modal-store-channels").classList.add("show");
+
+  try {
+    const rows = await SB.select("channel_connections", `store_id=eq.${storeId}&select=channel,status,external_name,connected_at`);
+    const byChannel = {};
+    rows.forEach(r => byChannel[r.channel] = r);
+
+    const waConnected = !!s.whatsapp_connected;
+    const items = [
+      { key: "wa", connected: waConnected, name: s.whatsapp_connected_number || null },
+      ...ALL_CHANNELS.filter(c => c !== "wa").map(c => ({
+        key: c,
+        connected: byChannel[c]?.status === "connected",
+        name: byChannel[c]?.external_name || null,
+      })),
+    ];
+
+    $("#admin-channels-body").innerHTML = items.map(it => `
+      <div class="checkbox-row" style="justify-content:space-between;padding:10px 0;border-bottom:1px solid var(--line);">
+        <span>${METACHANNEL_LABELS[it.key] || it.key}${it.name ? ' — ' + escapeHtml(it.name) : ''}</span>
+        ${it.connected ? `<span class="badge ok">متصل</span>` : `<span class="badge bad">غير متصل</span>`}
       </div>
-
-      <button class="nav-item active" data-tab="a-overview"><span class="ic">◆</span> نظرة عامة</button>
-      <button class="nav-item" data-tab="a-stores"><span class="ic">▤</span> المتاجر</button>
-      <button class="nav-item" data-tab="a-subscriptions"><span class="ic">💳</span> الاشتراكات <span class="notif-dot" id="notif-dot-a-subscriptions"></span></button>
-      <button class="nav-item" data-tab="a-channels"><span class="ic">⛭</span> القنوات</button>
-      <button class="nav-item" data-tab="a-wa-messages"><span class="ic">◐</span> رسائل واتساب</button>
-      <button class="nav-item" data-tab="a-api"><span class="ic">◈</span> إعدادات الذكاء الاصطناعي</button>
-      <button class="nav-item" data-tab="a-announcements"><span class="ic">◉</span> الإعلانات</button>
-      <button class="nav-item" data-tab="a-complaints"><span class="ic">✉</span> الشكاوى <span class="notif-dot" id="notif-dot-a-complaints"></span></button>
-
-      <div class="sidebar-foot">
-        <div class="who"><b id="admin-name-label">المشرف العام</b>مشرف النظام</div>
-        <button class="btn btn-ghost btn-sm" id="admin-logout" style="width:100%;justify-content:flex-start;color:rgba(238,244,241,0.7)">⇦ تسجيل الخروج</button>
-      </div>
-    </aside>
-
-    <main class="main">
-      <!-- نظرة عامة -->
-      <section class="tab-panel" id="tab-a-overview">
-        <div class="topbar">
-          <div>
-            <h2>نظرة عامة</h2>
-            <div class="sub">ملخص شامل عن المتاجر والطلبات في النظام</div>
-          </div>
-        </div>
-        <div class="stat-grid" id="admin-stats"></div>
-        <div class="panel">
-          <div class="panel-head">
-            <div>
-              <h3>أحدث المتاجر</h3>
-              <div class="sub">آخر المتاجر المضافة إلى النظام</div>
-            </div>
-            <button class="btn btn-outline btn-sm" data-goto="a-stores">عرض الكل</button>
-          </div>
-          <div class="card-grid" id="admin-recent-stores"></div>
-        </div>
-      </section>
-
-      <!-- المتاجر -->
-      <section class="tab-panel hidden" id="tab-a-stores">
-        <div class="topbar">
-          <div>
-            <h2>إدارة المتاجر</h2>
-            <div class="sub">التعديل، تمديد/إلغاء الاشتراك، الزبائن، القنوات المتصلة — التسجيل يتم ذاتيًا عبر صفحة إنشاء حساب فقط</div>
-          </div>
-        </div>
-        <div class="panel">
-          <div class="panel-head">
-            <div><h3>كل المتاجر</h3><div class="sub" id="stores-count-label">0 متجر</div></div>
-            <input type="text" id="store-search" placeholder="بحث بالاسم أو رقم الهاتف..." style="padding:9px 13px;border-radius:8px;border:1.5px solid var(--line);font-size:13px;min-width:220px;">
-          </div>
-          <div class="card-grid" id="stores-grid"></div>
-        </div>
-      </section>
-
-      <!-- الاشتراكات -->
-      <section class="tab-panel hidden" id="tab-a-subscriptions">
-        <div class="topbar">
-          <div>
-            <h2>الاشتراكات</h2>
-            <div class="sub">طلبات الاشتراك المدفوعة، الأسعار، وأكواد الخصم</div>
-          </div>
-        </div>
-
-        <div class="panel">
-          <div class="panel-head">
-            <div><h3>أسعار الاشتراك</h3><div class="sub">تُعرض هذه الأسعار مباشرة بصفحة الاشتراك</div></div>
-          </div>
-          <div class="form-grid" style="grid-template-columns:1fr 1fr;gap:14px;">
-            <div class="field">
-              <label>السعر الشهري (د.ع)</label>
-              <input type="number" id="f-monthly-price" min="0" step="1000" />
-            </div>
-            <div class="field">
-              <label>السعر السنوي (د.ع)</label>
-              <input type="number" id="f-yearly-price" min="0" step="1000" />
-            </div>
-          </div>
-          <button class="btn btn-primary btn-sm" id="btn-save-sub-prices" style="width:auto;">حفظ الأسعار</button>
-        </div>
-
-        <div class="panel">
-          <div class="panel-head">
-            <div><h3>طرق الدفع</h3><div class="sub">فعّل أو عطّل أي طريقة دفع بضغطة زر</div></div>
-          </div>
-
-          <div class="checkbox-row" style="justify-content:space-between;padding:10px 0;border-bottom:1px solid var(--line);">
-            <span>الدفع بالبطاقة (Visa/Mastercard)</span>
-            <label class="switch"><input type="checkbox" id="pm-card-enabled" /><span class="slider"></span></label>
-          </div>
-          <div class="checkbox-row" style="justify-content:space-between;padding:10px 0;border-bottom:1px solid var(--line);">
-            <span>التحويل المباشر (زين كاش / سوبر كي)</span>
-            <label class="switch"><input type="checkbox" id="pm-transfer-enabled" /><span class="slider"></span></label>
-          </div>
-          <div class="checkbox-row" style="justify-content:space-between;padding:10px 0;border-bottom:1px solid var(--line);">
-            <span>خيار زين كاش</span>
-            <label class="switch"><input type="checkbox" id="pm-zaincash-enabled" /><span class="slider"></span></label>
-          </div>
-          <div class="checkbox-row" style="justify-content:space-between;padding:10px 0;margin-bottom:16px;">
-            <span>خيار سوبر كي</span>
-            <label class="switch"><input type="checkbox" id="pm-superkey-enabled" /><span class="slider"></span></label>
-          </div>
-
-          <div class="form-grid" style="grid-template-columns:1fr 1fr;gap:14px;">
-            <div class="field">
-              <label>رقم محفظة زين كاش</label>
-              <input type="text" id="pm-zaincash-number" placeholder="0790xxxxxxx" />
-            </div>
-            <div class="field">
-              <label>رقم محفظة سوبر كي</label>
-              <input type="text" id="pm-superkey-number" placeholder="0790xxxxxxx" />
-            </div>
-            <div class="field">
-              <label>صورة QR — زين كاش</label>
-              <input type="file" id="pm-zaincash-qr-file" accept="image/*" />
-              <img id="pm-zaincash-qr-preview" style="max-width:100px;margin-top:8px;border:1px solid var(--line);border-radius:8px;" />
-            </div>
-            <div class="field">
-              <label>صورة QR — سوبر كي</label>
-              <input type="file" id="pm-superkey-qr-file" accept="image/*" />
-              <img id="pm-superkey-qr-preview" style="max-width:100px;margin-top:8px;border:1px solid var(--line);border-radius:8px;" />
-            </div>
-          </div>
-          <button class="btn btn-primary btn-sm" id="btn-save-payment-methods" style="width:auto;">حفظ إعدادات الدفع</button>
-        </div>
-
-        <div class="panel">
-          <div class="panel-head">
-            <div><h3>أكواد الخصم</h3><div class="sub" id="discount-codes-count-label">0 كود</div></div>
-          </div>
-          <div class="form-grid" style="grid-template-columns:2fr 1fr 1fr auto;gap:10px;align-items:end;margin-bottom:16px;">
-            <div class="field" style="margin:0;">
-              <label>الكود</label>
-              <input type="text" id="f-discount-code" placeholder="SAVE10" style="text-transform:uppercase;" />
-            </div>
-            <div class="field" style="margin:0;">
-              <label>نوع الخصم</label>
-              <select id="f-discount-type">
-                <option value="percent">نسبة %</option>
-                <option value="fixed">مبلغ ثابت (د.ع)</option>
-              </select>
-            </div>
-            <div class="field" style="margin:0;">
-              <label>القيمة</label>
-              <input type="number" id="f-discount-value" min="0" step="1" />
-            </div>
-            <button class="btn btn-primary btn-sm" id="btn-add-discount-code">إضافة</button>
-          </div>
-          <div id="discount-codes-list"></div>
-        </div>
-
-        <div class="panel">
-          <div class="panel-head">
-            <div><h3>طلبات الاشتراك</h3><div class="sub" id="subscribe-requests-count-label">0 طلب</div></div>
-            <div class="tabs" id="subscribe-filter-tabs">
-              <button class="tab-btn active" data-status="pending">قيد الانتظار</button>
-              <button class="tab-btn" data-status="paid">مفعّلة</button>
-              <button class="tab-btn" data-status="all">الكل</button>
-            </div>
-          </div>
-          <div id="subscribe-requests-list"></div>
-        </div>
-      </section>
-
-      <!-- القنوات -->
-      <section class="tab-panel hidden" id="tab-a-channels">
-        <div class="topbar">
-          <div>
-            <h2>إدارة القنوات</h2>
-            <div class="sub">تحكّم بإظهار/إخفاء أو تفعيل/إغلاق أي قناة — عامًا لكل المتاجر، أو استثناء لمتاجر محددة</div>
-          </div>
-        </div>
-        <div class="panel">
-          <div id="admin-channels-list"></div>
-        </div>
-      </section>
-
-      <!-- إعدادات API -->
-      <!-- رسائل واتساب -->
-      <section class="tab-panel hidden" id="tab-a-wa-messages">
-        <div class="topbar">
-          <div>
-            <h2>رسائل واتساب</h2>
-            <div class="sub">اربط رقمين منفصلين: واحد لرموز التحقق عند التسجيل، وواحد لإرسال رسائل مؤقتة للتجار</div>
-          </div>
-        </div>
-
-        <!-- رقم رموز التحقق (OTP) عبر Baileys مباشرة -->
-        <div class="panel">
-          <div class="panel-head"><h3>رقم رموز التحقق (تسجيل حساب جديد)</h3></div>
-          <p style="color:var(--ink-soft);font-size:12.5px;margin:-6px 0 14px;">يُستخدم لإرسال كود التحقق المكوّن من 6 أرقام لحظة إنشاء حساب تاجر جديد بصفحة التسجيل، عبر رقم واتساب مربوط مباشرة بنفس آلية ربط رقم "إرسال رسائل واتساب" بالأسفل — بدون أي خدمة سحابية وسيطة وبدون أي حصة شهرية. جلسة منفصلة تمامًا عن رقم الإرسال الجماعي، اربطه برقم مخصص لرموز التحقق فقط.</p>
-
-          <div id="otp-admin-state-disconnected">
-            <p style="color:var(--ink-soft);font-size:13.5px;margin:0 0 14px;">لا يوجد رقم مربوط حاليًا لإرسال رموز التحقق، فستفشل عملية إنشاء حساب جديد عند خطوة إرسال كود التحقق حتى تربط رقمًا. اضغط الزر أدناه لإظهار رمز QR.</p>
-            <button class="btn btn-primary btn-sm" id="btn-otp-admin-connect">ربط رقم جديد</button>
-          </div>
-
-          <div id="otp-admin-state-loading" class="hidden">
-            <p style="color:var(--ink-soft);font-size:13.5px;">جارٍ التحضير، انتظر لحظات...</p>
-          </div>
-
-          <div id="otp-admin-state-qr" class="hidden" style="text-align:center;">
-            <p style="color:var(--ink-soft);font-size:13.5px;margin-bottom:12px;">افتح واتساب على الرقم المخصص لرموز التحقق ← الأجهزة المرتبطة ← ربط جهاز ← امسح الرمز:</p>
-            <img id="otp-admin-qr-img" src="" alt="QR" style="width:220px;height:220px;border:1px solid var(--line);border-radius:var(--radius-s);padding:8px;background:#fff;" />
-            <div style="margin-top:12px;"><button class="btn btn-outline btn-sm" id="btn-otp-admin-refresh-qr">تحديث الرمز</button></div>
-          </div>
-
-          <div id="otp-admin-state-connected" class="hidden">
-            <div class="checkbox-row" style="margin-bottom:14px;">
-              <span class="badge ok">متصل</span>
-              <span id="otp-admin-connected-number" style="font-family:var(--font-mono);"></span>
-            </div>
-            <button class="btn btn-bad btn-sm" id="btn-otp-admin-disconnect">فصل الرقم</button>
-          </div>
-        </div>
-
-        <!-- حالة الربط -->
-        <div class="panel">
-          <div class="panel-head"><h3>ربط رقم الإرسال (رسائل جماعية/مخصصة)</h3></div>
-
-          <div id="wa-admin-state-disconnected">
-            <p style="color:var(--ink-soft);font-size:13.5px;margin:0 0 14px;">لا يوجد رقم مربوط حاليًا. اضغط الزر أدناه لإظهار رمز QR وربط أي رقم واتساب تختاره.</p>
-            <button class="btn btn-primary btn-sm" id="btn-wa-admin-connect">ربط رقم جديد</button>
-          </div>
-
-          <div id="wa-admin-state-loading" class="hidden">
-            <p style="color:var(--ink-soft);font-size:13.5px;">جارٍ التحضير، انتظر لحظات...</p>
-          </div>
-
-          <div id="wa-admin-state-qr" class="hidden" style="text-align:center;">
-            <p style="color:var(--ink-soft);font-size:13.5px;margin-bottom:12px;">افتح واتساب على الرقم المطلوب ربطه ← الأجهزة المرتبطة ← ربط جهاز ← امسح الرمز:</p>
-            <img id="wa-admin-qr-img" src="" alt="QR" style="width:220px;height:220px;border:1px solid var(--line);border-radius:var(--radius-s);padding:8px;background:#fff;" />
-            <div style="margin-top:12px;"><button class="btn btn-outline btn-sm" id="btn-wa-admin-refresh-qr">تحديث الرمز</button></div>
-          </div>
-
-          <div id="wa-admin-state-connected" class="hidden">
-            <div class="checkbox-row" style="margin-bottom:14px;">
-              <span class="badge ok">متصل</span>
-              <span id="wa-admin-connected-number" style="font-family:var(--font-mono);"></span>
-            </div>
-            <button class="btn btn-bad btn-sm" id="btn-wa-admin-disconnect">فصل الرقم</button>
-          </div>
-        </div>
-
-        <!-- إرسال رسالة -->
-        <div class="panel">
-          <div class="panel-head"><h3>إرسال رسالة</h3></div>
-          <div class="form-grid">
-            <div class="field" style="grid-column:1/-1;">
-              <label>الجهة المستهدفة</label>
-              <select id="wa-msg-target">
-                <option value="all">كل التجار المسجلين (جدول الاشتراك)</option>
-                <option value="custom">رقم مخصص</option>
-              </select>
-            </div>
-            <div class="field hidden" id="wa-msg-custom-phone-field">
-              <label>رقم الهاتف المخصص</label>
-              <input type="tel" id="wa-msg-custom-phone" placeholder="07xxxxxxxxx" inputmode="numeric" style="font-family:var(--font-mono);">
-            </div>
-            <div class="field" style="grid-column:1/-1;">
-              <label>نص الرسالة</label>
-              <textarea id="wa-msg-text" rows="4" placeholder="اكتب نص الرسالة هنا..."></textarea>
-            </div>
-          </div>
-          <div style="margin-top:14px;display:flex;align-items:center;gap:12px;flex-wrap:wrap;">
-            <button class="btn btn-primary btn-sm" id="btn-wa-msg-send">إرسال</button>
-            <span id="wa-msg-recipient-count" style="font-size:12.5px;color:var(--ink-soft);"></span>
-          </div>
-
-          <div id="wa-bulk-progress" class="hidden" style="margin-top:16px;">
-            <div class="sub" id="wa-bulk-progress-label">جارٍ الإرسال...</div>
-            <div style="background:var(--paper);border:1px solid var(--line);border-radius:var(--radius-s);height:10px;overflow:hidden;margin-top:6px;">
-              <div id="wa-bulk-progress-bar" style="background:var(--palm);height:100%;width:0%;transition:width .3s ease;"></div>
-            </div>
-          </div>
-        </div>
-      </section>
-
-      <section class="tab-panel hidden" id="tab-a-api">
-        <div class="topbar">
-          <div>
-            <h2>إعدادات الذكاء الاصطناعي</h2>
-            <div class="sub">مفتاح Gemini الأساسي، ومفتاح احتياطي واحد للضرورة القصوى فقط</div>
-          </div>
-        </div>
-        <div class="panel">
-          <div class="panel-head"><h3>المفتاح الأساسي (Gemini)</h3></div>
-          <div class="form-grid">
-            <div class="field" style="grid-column:1/-1;">
-              <label>مفتاح Gemini (AI Studio)</label>
-              <input type="text" id="gemini-api-key" placeholder="AQ.A******************************************" style="font-family:var(--font-mono)">
-            </div>
-            <div class="field" style="grid-column:1/-1;">
-              <label>نوع الموديل</label>
-              <input type="text" id="gemini-model" placeholder="gemini-3.6-flash" style="font-family:var(--font-mono)">
-            </div>
-          </div>
-          <div style="margin-top:14px;"><button class="btn btn-primary btn-sm" id="save-global-api">حفظ المفتاح الأساسي</button></div>
-        </div>
-
-        <div class="panel">
-          <div class="panel-head">
-            <div><h3>مفتاح احتياطي (للضرورة القصوى فقط)</h3><div class="sub">يُستخدم فقط إذا فشل المفتاح الأساسي تمامًا. يُفضّل الاكتفاء بمفتاح واحد هنا لتفادي أي تعقيد إضافي.</div></div>
-          </div>
-
-          <div class="form-grid" style="margin-bottom:14px;">
-            <div class="field">
-              <label>اسم وصفي (للتمييز فقط)</label>
-              <input type="text" id="pool-label" placeholder="مثال: احتياط للضرورة">
-            </div>
-            <div class="field">
-              <label>الموديل</label>
-              <input type="text" id="pool-model" placeholder="gemini-3.6-flash" style="font-family:var(--font-mono)">
-            </div>
-            <div class="field">
-              <label>مفتاح Gemini API</label>
-              <input type="text" id="pool-api-key" placeholder="المفتاح..." style="font-family:var(--font-mono)">
-            </div>
-          </div>
-          <div style="margin-bottom:18px;"><button class="btn btn-primary btn-sm" id="add-pool-key">+ إضافة كمفتاح احتياطي</button></div>
-
-          <div class="table-wrap">
-            <table>
-              <thead><tr><th>الاسم</th><th>الموديل</th><th>الحالة</th><th>إجراء</th></tr></thead>
-              <tbody id="ai-pool-tbody"></tbody>
-            </table>
-          </div>
-        </div>
-      </section>
-
-      <!-- الإعلانات -->
-      <section class="tab-panel hidden" id="tab-a-announcements">
-        <div class="topbar">
-          <div>
-            <h2>الإعلانات</h2>
-            <div class="sub">أرسل إعلانًا عامًا لكل المتاجر أو إعلانًا خاصًا لمتجر واحد</div>
-          </div>
-        </div>
-        <div class="panel">
-          <div class="panel-head"><h3>إعلان جديد</h3></div>
-          <div class="form-grid">
-            <div class="field">
-              <label>عنوان الإعلان</label>
-              <input type="text" id="ann-title" placeholder="مثال: صيانة مجدولة">
-            </div>
-            <div class="field">
-              <label>المتجر المستهدف</label>
-              <select id="ann-target">
-                <option value="">جميع المتاجر (عام)</option>
-              </select>
-            </div>
-            <div class="field" style="grid-column:1/-1;">
-              <label>نص الإعلان</label>
-              <textarea id="ann-message" rows="3" placeholder="اكتب نص الإعلان هنا..."></textarea>
-            </div>
-          </div>
-          <div style="margin-top:14px;"><button class="btn btn-primary btn-sm" id="send-announcement">نشر الإعلان</button></div>
-        </div>
-        <div class="panel">
-          <div class="panel-head"><h3>الإعلانات المرسلة</h3></div>
-          <div id="announcements-list"></div>
-        </div>
-      </section>
-
-      <!-- الشكاوى -->
-      <section class="tab-panel hidden" id="tab-a-complaints">
-        <div class="topbar">
-          <div>
-            <h2>شكاوى المتاجر</h2>
-            <div class="sub">الشكاوى المرسلة من أصحاب المتاجر</div>
-          </div>
-        </div>
-        <div class="panel">
-          <div class="table-wrap">
-            <table>
-              <thead><tr><th>المتجر</th><th>الموضوع</th><th>الرسالة</th><th>الحالة</th><th>التاريخ</th><th>إجراء</th></tr></thead>
-              <tbody id="complaints-tbody"></tbody>
-            </table>
-          </div>
-        </div>
-      </section>
-    </main>
-  </div>
-</div>
-
-<!-- =========================================================
-     شاشة لوحة المتجر
-========================================================= -->
-<div id="screen-store" class="screen">
-  <div class="mobile-topbar">
-    <div style="display:flex;align-items:center;gap:10px;">
-      <div class="glyph">م</div>
-      <b id="store-mobile-name">متجري</b>
-    </div>
-    <button id="store-menu-toggle">☰</button>
-  </div>
-  <div class="sidebar-scrim" id="store-scrim"></div>
-
-  <div class="app-shell">
-    <aside class="sidebar" id="store-sidebar">
-      <div class="brand-mark">
-        <div class="glyph">م</div>
-        <div class="text">
-          <h1 id="store-side-name">متجري</h1>
-          <p>لوحة تحكم المتجر</p>
-        </div>
-      </div>
-
-      <button class="nav-item active" data-tab="s-orders"><span class="ic">▤</span> الطلبات</button>
-      <button class="nav-item" data-tab="s-products"><span class="ic">◫</span> المنتجات</button>
-      <button class="nav-item" data-tab="s-announcements"><span class="ic">📣</span> الإعلانات <span class="notif-dot" id="notif-dot-s-announcements"></span></button>
-      <button class="nav-item" data-tab="s-whatsapp"><span class="ic">◉</span> ربط القنوات</button>
-      <button class="nav-item" data-tab="s-ai"><span class="ic">✦</span> إعدادات الذكاء الاصطناعي</button>
-      <button class="nav-item" data-tab="s-print"><span class="ic">⎙</span> الطباعة</button>
-      <button class="nav-item" data-tab="s-complaint"><span class="ic">✉</span> تقديم شكوى</button>
-      <button class="nav-item" data-tab="s-subscription"><span class="ic">💳</span> الاشتراك</button>
-      <button class="nav-item" data-tab="s-settings"><span class="ic">◈</span> إعدادات الحساب</button>
-
-      <div class="sidebar-foot">
-        <div class="who"><b id="store-name-label">اسم المتجر</b>صاحب المتجر</div>
-        <button class="btn btn-ghost btn-sm" id="store-logout" style="width:100%;justify-content:flex-start;color:rgba(238,244,241,0.7)">⇦ تسجيل الخروج</button>
-      </div>
-    </aside>
-
-    <main class="main">
-      <!-- الطلبات -->
-      <section class="tab-panel" id="tab-s-orders">
-        <div class="topbar">
-          <div>
-            <h2>طلبات الزبائن</h2>
-            <div class="sub">الزبائن المرتبطون برقم الواتساب الخاص بمتجرك فقط</div>
-          </div>
-        </div>
-        <div class="stat-grid" id="store-stats"></div>
-
-        <div id="store-announcement-banner"></div>
-
-        <div class="panel">
-          <div class="panel-head">
-            <div><h3>سجل الطلبات</h3></div>
-            <div class="tabs" id="orders-filter-tabs">
-              <button class="tab-btn active" data-filter="all">الكل</button>
-              <button class="tab-btn" data-filter="pending">بالانتظار</button>
-              <button class="tab-btn" data-filter="completed">منجزة</button>
-              <button class="tab-btn" data-filter="cancelled">ملغاة</button>
-            </div>
-          </div>
-          <div class="table-wrap">
-            <table>
-              <thead>
-                <tr>
-                  <th>اسم الزبون</th><th>الموقع</th><th>الرقم</th><th>الطلب</th><th>نوع الطلب</th><th>السعر</th><th>الكمية</th><th>الملاحظات</th><th>مكان الطلب</th><th>التوقيت</th><th>الحالة</th><th>إجراء</th>
-                </tr>
-              </thead>
-              <tbody id="orders-tbody"></tbody>
-            </table>
-          </div>
-          <div class="empty-state hidden" id="orders-empty">
-            <div class="glyph">▤</div>
-            <p>لا توجد طلبات في هذا القسم حتى الآن</p>
-          </div>
-        </div>
-      </section>
-
-      <!-- المنتجات -->
-      <section class="tab-panel hidden" id="tab-s-products">
-        <div class="topbar">
-          <div>
-            <h2>المنتجات</h2>
-            <div class="sub">إدارة منتجات متجرك، المخزون، والفئات</div>
-          </div>
-          <button class="btn btn-primary" id="btn-add-product">+ أضف منتج</button>
-        </div>
-
-        <div class="stat-grid" id="products-stats"></div>
-
-        <div class="panel">
-          <div class="panel-head">
-            <div><h3>كل المنتجات</h3><div class="sub" id="products-count-label">0 منتج</div></div>
-            <input type="text" id="product-search" placeholder="بحث بالاسم أو السعر أو النوع..." style="padding:9px 13px;border-radius:8px;border:1.5px solid var(--line);font-size:13px;min-width:220px;">
-          </div>
-
-          <div class="tabs" id="products-filter-tabs" style="margin-bottom:14px;">
-            <button class="tab-btn active" data-pfilter="all">الكل</button>
-            <button class="tab-btn" data-pfilter="low_stock">قريبة النفاذ</button>
-            <button class="tab-btn" data-pfilter="out_of_stock">منتهية الكمية</button>
-            <button class="tab-btn" data-pfilter="most_ordered">الأكثر طلبًا</button>
-            <button class="tab-btn" data-pfilter="least_ordered">الأقل طلبًا</button>
-          </div>
-
-          <div class="form-grid" style="margin-bottom:14px;">
-            <div class="field">
-              <label>تصفية حسب الفئة</label>
-              <select id="product-category-filter">
-                <option value="">كل الفئات</option>
-              </select>
-            </div>
-          </div>
-
-          <div class="card-grid" id="products-grid"></div>
-          <div class="empty-state hidden" id="products-empty">
-            <div class="glyph">◫</div>
-            <p>لا توجد منتجات مطابقة</p>
-          </div>
-        </div>
-      </section>
-
-      <!-- الإعلانات -->
-      <section class="tab-panel hidden" id="tab-s-announcements">
-        <div class="topbar">
-          <div>
-            <h2>الإعلانات</h2>
-            <div class="sub">كل الإعلانات المرسلة من الإدارة (العامة والخاصة بمتجرك)</div>
-          </div>
-        </div>
-        <div class="panel">
-          <div id="store-announcements-list"></div>
-        </div>
-      </section>
-
-      <!-- ربط القنوات -->
-      <section class="tab-panel hidden" id="tab-s-whatsapp">
-        <div class="topbar">
-          <div>
-            <h2>ربط القنوات</h2>
-            <div class="sub">اربط حسابات متجرك حتى يبدأ الذكاء الاصطناعي بالرد على الزبائن من كل منصة</div>
-          </div>
-        </div>
-
-        <div class="channel-cards">
-          <!-- بطاقة واتساب -->
-          <div class="channel-card wa" id="channel-card-wa">
-            <div class="channel-icon">◉</div>
-            <div class="channel-name">واتساب</div>
-            <div class="channel-status-row disconnected" id="wa-status-row">
-              <span class="channel-status-dot"></span>
-              <span id="wa-status-label">غير متصل</span>
-            </div>
-            <div id="wa-connected-number" class="channel-external-name hidden"></div>
-            <button class="btn btn-primary btn-sm" id="btn-wa-open-modal" style="width:100%;">فتح إعدادات الربط</button>
-          </div>
-
-          <!-- بطاقة ماسنجر -->
-          <div class="channel-card messenger" id="channel-card-messenger">
-            <div class="channel-icon">✉</div>
-            <div class="channel-name">ماسنجر</div>
-            <div class="channel-status-row disconnected" id="messenger-status-row">
-              <span class="channel-status-dot"></span>
-              <span id="messenger-status-label">غير متصل</span>
-            </div>
-            <div id="messenger-external-name" class="channel-external-name hidden"></div>
-            <button class="btn btn-primary btn-sm" id="btn-messenger-connect" style="width:100%;">ربط الحساب عبر Meta</button>
-            <button class="btn btn-bad btn-sm hidden" id="btn-messenger-disconnect" style="width:100%;margin-top:8px;">فصل الربط</button>
-            <div class="channel-ai-row hidden" id="messenger-ai-row">
-              <span>تفعيل الذكاء الاصطناعي</span>
-              <label class="switch">
-                <input type="checkbox" id="messenger-ai-toggle">
-                <span class="slider"></span>
-              </label>
-            </div>
-          </div>
-
-          <!-- بطاقة انستغرام -->
-          <div class="channel-card instagram" id="channel-card-instagram">
-            <div class="channel-icon">◈</div>
-            <div class="channel-name">انستغرام</div>
-            <div class="channel-status-row disconnected" id="instagram-status-row">
-              <span class="channel-status-dot"></span>
-              <span id="instagram-status-label">غير متصل</span>
-            </div>
-            <div id="instagram-external-name" class="channel-external-name hidden"></div>
-            <button class="btn btn-primary btn-sm" id="btn-instagram-connect" style="width:100%;">ربط حساب انستغرام</button>
-            <div class="sub" style="margin-top:6px;">تسجيل دخول مباشر بحساب انستغرام (Business أو Creator) — بدون الحاجة لصفحة فيسبوك</div>
-            <button class="btn btn-bad btn-sm hidden" id="btn-instagram-disconnect" style="width:100%;margin-top:8px;">فصل الربط</button>
-            <div class="channel-ai-row hidden" id="instagram-ai-row">
-              <span>تفعيل الذكاء الاصطناعي</span>
-              <label class="switch">
-                <input type="checkbox" id="instagram-ai-toggle">
-                <span class="slider"></span>
-              </label>
-            </div>
-          </div>
-
-          <!-- بطاقة تيليجرام -->
-          <div class="channel-card telegram" id="channel-card-telegram">
-            <div class="channel-icon">✈</div>
-            <div class="channel-name">تيليجرام</div>
-            <div class="channel-status-row disconnected" id="telegram-status-row">
-              <span class="channel-status-dot"></span>
-              <span id="telegram-status-label">غير متصل</span>
-            </div>
-            <div id="telegram-external-name" class="channel-external-name hidden"></div>
-            <button class="btn btn-primary btn-sm" id="btn-telegram-connect" style="width:100%;">ربط بوت تيليجرام</button>
-            <div class="sub" style="margin-top:6px;">أنشئ بوتًا خاصًا بمتجرك عبر محادثة @BotFather بتطبيق تيليجرام، والصق توكنه هنا</div>
-            <button class="btn btn-bad btn-sm hidden" id="btn-telegram-disconnect" style="width:100%;margin-top:8px;">فصل الربط</button>
-            <div class="channel-ai-row hidden" id="telegram-ai-row">
-              <span>تفعيل الذكاء الاصطناعي</span>
-              <label class="switch">
-                <input type="checkbox" id="telegram-ai-toggle">
-                <span class="slider"></span>
-              </label>
-            </div>
-          </div>
-
-          <!-- بطاقة تيك توك -->
-          <div class="channel-card tiktok" id="channel-card-tiktok">
-            <div class="channel-icon">♪</div>
-            <div class="channel-name">تيك توك</div>
-            <div class="channel-status-row disconnected" id="tiktok-status-row">
-              <span class="channel-status-dot"></span>
-              <span id="tiktok-status-label">غير متصل</span>
-            </div>
-            <div id="tiktok-external-name" class="channel-external-name hidden"></div>
-            <button class="btn btn-primary btn-sm" id="btn-tiktok-connect" style="width:100%;">ربط حساب تيك توك</button>
-            <div class="sub" style="margin-top:6px;">يتطلب حساب تيك توك Business وموافقة تيك توك على صلاحية الرسائل قبل أن يعمل الرد التلقائي فعليًا</div>
-            <button class="btn btn-bad btn-sm hidden" id="btn-tiktok-disconnect" style="width:100%;margin-top:8px;">فصل الربط</button>
-            <div class="channel-ai-row hidden" id="tiktok-ai-row">
-              <span>تفعيل الذكاء الاصطناعي</span>
-              <label class="switch">
-                <input type="checkbox" id="tiktok-ai-toggle">
-                <span class="slider"></span>
-              </label>
-            </div>
-          </div>
-        </div>
-
-        <p style="color:var(--ink-soft);font-size:12.5px;">
-          ملاحظة: ربط ماسنجر وانستغرام يفتح نافذة منبثقة من فيسبوك (Meta) لتسجيل الدخول والموافقة على الصلاحيات، ثم تُغلق تلقائيًا بعد نجاح الربط.
-        </p>
-      </section>
-
-      <!-- إعدادات الذكاء الاصطناعي (لكل متجر) -->
-      <section class="tab-panel hidden" id="tab-s-ai">
-        <div class="topbar">
-          <div>
-            <h2>إعدادات الذكاء الاصطناعي</h2>
-            <div class="sub">هوية البوت أمام زبائنك — مفاتيح ونماذج الذكاء الاصطناعي تُدار من قبل الإدارة العامة فقط</div>
-          </div>
-        </div>
-
-        <div class="panel">
-          <div class="panel-head"><h3>هوية البوت</h3></div>
-          <div class="form-grid">
-            <div class="field">
-              <label>اسم المتجر الذي يظهر للبوت أثناء الرد</label>
-              <input type="text" id="store-ai-display-name" placeholder="مثال: متجر لمسة أناقة">
-            </div>
-            <div class="field">
-              <label>وسيلة التواصل (رابط / بريد / رقم)</label>
-              <input type="text" id="store-ai-contact-info" placeholder="مثال: 07xxxxxxxxx أو رابط انستغرام">
-            </div>
-          </div>
-          <p class="sub" style="margin-top:8px;">يستخدم البوت هذين الحقلين فقط لتقديم نفسه ومشاركة وسيلة تواصل عند الحاجة. لا يمكن تخصيص تعليمات أخرى — هذا لضمان التزام البوت بقواعد الأمان والمنتجات المتوفرة فقط.</p>
-          <div style="margin-top:14px;"><button class="btn btn-primary btn-sm" id="save-store-ai-settings">حفظ</button></div>
-        </div>
-      </section>
-
-      <!-- الطباعة -->
-      <section class="tab-panel hidden" id="tab-s-print">
-        <div class="topbar">
-          <div>
-            <h2>طباعة الطلبات</h2>
-            <div class="sub">اختر نوع الطلبات وشكل الطباعة المناسب</div>
-          </div>
-        </div>
-        <div class="panel">
-          <div class="panel-head"><h3>ماذا تريد أن تطبع؟</h3></div>
-          <div class="form-grid">
-            <div class="field">
-              <label>حالة الطلبات</label>
-              <select id="print-status">
-                <option value="all">كل الطلبات</option>
-                <option value="pending">بالانتظار فقط</option>
-                <option value="completed">المنجزة فقط</option>
-                <option value="cancelled">الملغاة فقط</option>
-              </select>
-            </div>
-            <div class="field">
-              <label>شكل الطباعة</label>
-              <select id="print-mode">
-                <option value="table">جدول عادي</option>
-                <option value="labels">بطاقات لكل زبون (للصق على المنتج)</option>
-              </select>
-            </div>
-            <div class="field">
-              <label>من تاريخ (اختياري)</label>
-              <input type="date" id="print-from-date">
-            </div>
-          </div>
-          <div style="margin-top:16px;"><button class="btn btn-primary" id="btn-print">⎙ طباعة الآن</button></div>
-        </div>
-      </section>
-
-      <!-- تقديم شكوى -->
-      <section class="tab-panel hidden" id="tab-s-complaint">
-        <div class="topbar">
-          <div>
-            <h2>تقديم شكوى للمشرف</h2>
-            <div class="sub">سيتم إرسال شكواك مباشرة إلى لوحة المشرف العام</div>
-          </div>
-        </div>
-        <div class="panel">
-          <div class="form-grid">
-            <div class="field" style="grid-column:1/-1;">
-              <label>موضوع الشكوى</label>
-              <input type="text" id="complaint-subject" placeholder="مثال: مشكلة في ربط الواتساب">
-            </div>
-            <div class="field" style="grid-column:1/-1;">
-              <label>تفاصيل الشكوى</label>
-              <textarea id="complaint-message" rows="4" placeholder="اشرح المشكلة بالتفصيل..."></textarea>
-            </div>
-          </div>
-          <div style="margin-top:14px;"><button class="btn btn-primary btn-sm" id="send-complaint">إرسال الشكوى</button></div>
-        </div>
-        <div class="panel">
-          <div class="panel-head"><h3>شكاويّ السابقة</h3></div>
-          <div id="my-complaints-list"></div>
-        </div>
-      </section>
-
-      <!-- الاشتراك -->
-      <section class="tab-panel hidden" id="tab-s-subscription">
-        <div class="topbar">
-          <div>
-            <h2>الاشتراك</h2>
-            <div class="sub">حالة خطتك الحالية بالمنصة</div>
-          </div>
-        </div>
-        <div class="panel">
-          <div id="sub-badge-free" class="sub-plan-badge sub-badge-free hidden">
-            <div class="sub-badge-icon">🎁</div>
-            <div class="sub-badge-label">مجاني</div>
-            <div class="sub-badge-dates" id="sub-badge-dates-free"></div>
-          </div>
-          <div id="sub-badge-month" class="sub-plan-badge sub-badge-month hidden">
-            <div class="sub-badge-icon">📅</div>
-            <div class="sub-badge-label">شهري</div>
-            <div class="sub-badge-price" id="sub-badge-price-month"></div>
-            <div class="sub-badge-dates" id="sub-badge-dates-month"></div>
-          </div>
-          <div id="sub-badge-year" class="sub-plan-badge sub-badge-year hidden">
-            <div class="sub-badge-icon">⭐</div>
-            <div class="sub-badge-label">سنوي</div>
-            <div class="sub-badge-price" id="sub-badge-price-year"></div>
-            <div class="sub-badge-dates" id="sub-badge-dates-year"></div>
-          </div>
-          <a href="subscribe.html" target="_blank" rel="noopener" class="btn btn-primary btn-sm" style="width:auto;margin-top:16px;">ترقية / تجديد الاشتراك</a>
-        </div>
-      </section>
-
-      <!-- إعدادات الحساب -->
-      <section class="tab-panel hidden" id="tab-s-settings">
-
-        <!-- الواجهة الرئيسية لإعدادات الحساب -->
-        <div id="settings-home-view">
-          <div class="topbar">
-            <div>
-              <h2>إعدادات الحساب</h2>
-              <div class="sub">معلومات متجرك (البيانات الأساسية بيد المشرف)</div>
-            </div>
-          </div>
-          <div class="panel">
-            <div class="panel-head"><h3>معلومات المتجر</h3></div>
-            <div class="form-grid" id="store-info-view"></div>
-          </div>
-
-          <div class="panel">
-            <div class="panel-head"><h3>حول التطبيق</h3></div>
-            <div class="settings-links-list">
-              <a class="settings-link-item" href="about.html" target="_blank" rel="noopener">
-                <span>من نحن</span><span class="arrow">‹</span>
-              </a>
-              <a class="settings-link-item" href="privacy.html" target="_blank" rel="noopener">
-                <span>شروط الخصوصية</span><span class="arrow">‹</span>
-              </a>
-              <a class="settings-link-item" href="terms.html" target="_blank" rel="noopener">
-                <span>شروط الخدمة</span><span class="arrow">‹</span>
-              </a>
-              <a class="settings-link-item" href="faq.html" target="_blank" rel="noopener">
-                <span>الأسئلة الشائعة</span><span class="arrow">‹</span>
-              </a>
-            </div>
-          </div>
-
-          <div class="panel" style="border-color:var(--bad);">
-            <div class="panel-head"><h3 style="color:var(--bad);">منطقة الخطر</h3></div>
-            <p class="sub" style="margin-bottom:14px;">حذف حسابك نهائيًا من المنصة وكل بياناته المرتبطة به.</p>
-            <button class="btn btn-bad btn-sm" id="btn-open-delete-account">تقديم بطلب حذف الحساب</button>
-          </div>
-        </div>
-
-      </section>
-    </main>
-  </div>
-</div>
-
-<!-- =========================================================
-     المودالات
-========================================================= -->
-
-<!-- مودال ربط واتساب (QR) -->
-<div class="modal-backdrop" id="modal-wa">
-  <div class="modal" style="max-width:420px;">
-    <div class="modal-head">
-      <h3>ربط واتساب</h3>
-      <button class="modal-close" data-close="modal-wa">✕</button>
-    </div>
-
-    <div id="wa-state-disconnected">
-      <div class="empty-state" style="padding:30px 20px;">
-        <div class="glyph">◉</div>
-        <p style="margin-bottom:16px;">متجرك غير مربوط بواتساب حاليًا</p>
-        <button class="btn btn-primary" id="btn-wa-connect">ربط واتساب</button>
-      </div>
-    </div>
-
-    <div id="wa-state-loading" class="hidden" style="text-align:center;padding:30px 20px;">
-      <p style="color:var(--ink-soft);font-size:13.5px;">جارٍ تحضير رمز الربط...</p>
-    </div>
-
-    <div id="wa-state-qr" class="hidden" style="text-align:center;padding:20px;">
-      <p style="font-weight:700;margin-bottom:14px;">امسح الكود التالي من واتساب</p>
-      <p style="color:var(--ink-soft);font-size:12.5px;margin-bottom:16px;">واتساب ← الأجهزة المرتبطة ← ربط جهاز</p>
-      <img id="wa-qr-img" src="" alt="رمز QR" style="width:230px;height:230px;border-radius:14px;border:1px solid var(--line);padding:10px;background:#fff;" />
-      <div style="margin-top:16px;">
-        <button class="btn btn-outline btn-sm" id="btn-wa-refresh-qr">تحديث الرمز</button>
-      </div>
-    </div>
-
-    <div id="wa-state-connected" class="hidden">
-      <div class="empty-state" style="padding:30px 20px;">
-        <div class="glyph" style="color:var(--ok);">✔</div>
-        <p style="margin-bottom:4px;font-weight:700;color:var(--ok);">تم الربط بنجاح</p>
-        <p id="wa-connected-number-modal" style="color:var(--ink-soft);font-family:var(--font-mono);margin-bottom:18px;"></p>
-        <button class="btn btn-bad" id="btn-wa-disconnect">فصل الربط</button>
-      </div>
-    </div>
-  </div>
-</div>
-
-<!-- مودال اختيار صفحة فيسبوك عند ربط ماسنجر (تظهر فقط إذا كان لحساب التاجر أكثر من صفحة) -->
-<div class="modal-backdrop" id="modal-page-select">
-  <div class="modal" style="max-width:420px;">
-    <div class="modal-head">
-      <h3>اختر صفحة فيسبوك</h3>
-      <button class="modal-close" id="btn-page-select-close">✕</button>
-    </div>
-    <p style="color:var(--ink-soft);font-size:13px;margin:-8px 0 14px;">حسابك مسؤول عن أكثر من صفحة على فيسبوك، اختر الصفحة التي تريد ربطها بمتجرك:</p>
-    <div id="page-select-list" style="display:flex;flex-direction:column;gap:8px;max-height:360px;overflow-y:auto;"></div>
-  </div>
-</div>
-
-<!-- مودال ربط بوت تيليجرام (لصق التوكن مباشرة، بدون نافذة OAuth) -->
-<div class="modal-backdrop" id="modal-telegram-connect">
-  <div class="modal" style="max-width:420px;">
-    <div class="modal-head">
-      <h3>ربط بوت تيليجرام</h3>
-      <button class="modal-close" data-close="modal-telegram-connect">✕</button>
-    </div>
-    <p style="color:var(--ink-soft);font-size:13px;margin:-8px 0 14px;">
-      1) افتح تيليجرام وابحث عن <b>@BotFather</b><br>
-      2) أرسل له الأمر <b>/newbot</b> واتبع التعليمات لتسمية البوت<br>
-      3) سينشئ لك توكنًا (يشبه <span style="font-family:var(--font-mono);">123456:ABC-defGhIJ...</span>)، الصقه هنا:
-    </p>
-    <div class="field">
-      <label for="f-telegram-bot-token">توكن البوت</label>
-      <input type="text" id="f-telegram-bot-token" placeholder="مثال: 123456:ABC-defGhIJ..." dir="ltr">
-    </div>
-    <button class="btn btn-primary btn-sm" id="btn-telegram-connect-submit" style="width:100%;">ربط البوت</button>
-  </div>
-</div>
-
-<!-- مودال استثناءات قناة لمتاجر محددة (لوحة الأدمن) -->
-<div class="modal-backdrop" id="modal-channel-override">
-  <div class="modal" style="max-width:480px;">
-    <div class="modal-head">
-      <h3>استثناءات قناة <span id="channel-override-title"></span></h3>
-      <button class="modal-close" data-close="modal-channel-override">✕</button>
-    </div>
-    <p style="color:var(--ink-soft);font-size:13px;margin:-8px 0 14px;">
-      اختر متجرًا لتخصيص إظهار أو حالة هذه القناة له فقط، بغضّ النظر عن الإعداد العام أعلاه.
-    </p>
-    <div class="form-grid">
-      <div class="field">
-        <label>المتجر</label>
-        <select id="ov-store-select"></select>
-      </div>
-      <div class="field">
-        <label>الإظهار لهذا المتجر</label>
-        <select id="ov-visibility-select">
-          <option value="">يتبع الإعداد العام</option>
-          <option value="visible">إظهار دائمًا</option>
-          <option value="hidden">إخفاء دائمًا</option>
-        </select>
-      </div>
-      <div class="field" style="grid-column:1/-1;">
-        <label>حالة الربط لهذا المتجر</label>
-        <select id="ov-status-select">
-          <option value="">يتبع الإعداد العام</option>
-          <option value="enabled">مفتوحة دائمًا</option>
-          <option value="disabled">مغلقة دائمًا</option>
-        </select>
-      </div>
-    </div>
-    <button class="btn btn-primary btn-sm" id="btn-save-override" style="width:100%;margin-bottom:16px;">حفظ الاستثناء</button>
-
-    <div class="panel-head" style="padding:0;margin-bottom:8px;"><h3 style="font-size:14px;">استثناءات حالية</h3></div>
-    <div id="channel-override-list"></div>
-  </div>
-</div>
-
-<!-- مودال إضافة/تعديل متجر -->
-<div class="modal-backdrop" id="modal-store">
-  <div class="modal">
-    <div class="modal-head">
-      <h3 id="store-modal-title">إضافة متجر جديد</h3>
-      <button class="modal-close" data-close="modal-store">✕</button>
-    </div>
-    <div class="form-grid">
-      <div class="field">
-        <label>اسم المتجر</label>
-        <input type="text" id="f-store-name" placeholder="مثال: متجر الأمل">
-      </div>
-      <div class="field">
-        <label>الاسم الكامل لصاحب المتجر</label>
-        <input type="text" id="f-full-name" placeholder="الاسم الثلاثي">
-      </div>
-      <div class="field">
-        <label>رقم دخول المتجر (لوحة التحكم)</label>
-        <input type="text" id="f-store-phone" placeholder="07xxxxxxxxx" style="font-family:var(--font-mono)">
-      </div>
-      <div class="field">
-        <label>كلمة مرور دخول المتجر</label>
-        <input type="text" id="f-store-password" placeholder="كلمة المرور" style="font-family:var(--font-mono)">
-      </div>
-      <div class="field">
-        <label>رقم واتساب البوت المرتبط (ai_phone)</label>
-        <input type="text" id="f-ai-phone" placeholder="9647xxxxxxxxx" style="font-family:var(--font-mono)">
-      </div>
-      <div class="field">
-        <label>حالة المتجر</label>
-        <select id="f-status">
-          <option value="active">نشط</option>
-          <option value="suspended">موقوف</option>
-        </select>
-      </div>
-      <div class="field">
-        <label>خطة الاشتراك</label>
-        <select id="f-plan">
-          <option value="free">مجانية (7 أيام)</option>
-          <option value="month">شهرية</option>
-          <option value="year">سنوية</option>
-        </select>
-      </div>
-      <div class="field">
-        <label>حالة الاشتراك</label>
-        <select id="f-is-active">
-          <option value="true">ساري</option>
-          <option value="false">منتهي (يحتاج تجديد)</option>
-        </select>
-      </div>
-      <div class="field">
-        <label>تاريخ نفاذ الاشتراك</label>
-        <input type="date" id="f-expires-at">
-        <div style="margin-top:6px;"><button type="button" class="btn btn-outline btn-sm" id="btn-extend-30">+ تمديد 30 يوم</button></div>
-      </div>
-      <div class="field" style="grid-column:1/-1;">
-        <label>رابط / بيانات الباركود للربط على واتساب</label>
-        <input type="text" id="f-barcode" placeholder="رابط الربط أو نص QR">
-      </div>
-      <div class="field" style="grid-column:1/-1;">
-        <label>ملاحظات إضافية</label>
-        <textarea id="f-notes" rows="2" placeholder="أي معلومات إضافية عن المتجر"></textarea>
-      </div>
-    </div>
-
-    <hr style="border:none;border-top:1px solid var(--line);margin:20px 0;">
-
-    <div class="panel-head" style="margin-bottom:10px;">
-      <h3 style="font-size:14px;">منتجات المتجر</h3>
-      <button class="btn btn-outline btn-sm" id="btn-add-product-row">+ إضافة منتج</button>
-    </div>
-    <div id="products-list"></div>
-
-    <div class="modal-foot">
-      <button class="btn btn-outline btn-sm" data-close="modal-store">إلغاء</button>
-      <button class="btn btn-primary btn-sm" id="save-store-btn">حفظ المتجر</button>
-    </div>
-  </div>
-</div>
-
-<!-- مودال زبائن متجر (من لوحة الأدمن) -->
-<div class="modal-backdrop" id="modal-store-customers">
-  <div class="modal">
-    <div class="modal-head">
-      <h3 id="customers-modal-title">زبائن المتجر</h3>
-      <button class="modal-close" data-close="modal-store-customers">✕</button>
-    </div>
-    <div class="table-wrap">
-      <table>
-        <thead><tr><th>الاسم</th><th>الموقع</th><th>الرقم</th><th>الحالة</th><th>الوقت</th></tr></thead>
-      <!-- ملاحظة: الحالة هنا هي حالة الطلب (منجز/ملغي)، وليست حالة ربط واتساب. حالة ربط واتساب تظهر ببطاقة المتجر بقائمة المتاجر. -->
-        <tbody id="admin-customers-tbody"></tbody>
-      </table>
-    </div>
-  </div>
-</div>
-
-<!-- مودال قنوات متجر (من لوحة الأدمن) -->
-<div class="modal-backdrop" id="modal-store-channels">
-  <div class="modal">
-    <div class="modal-head">
-      <h3 id="channels-modal-title">قنوات المتجر</h3>
-      <button class="modal-close" data-close="modal-store-channels">✕</button>
-    </div>
-    <div id="admin-channels-body"></div>
-  </div>
-</div>
-
-<!-- مودال إضافة/تعديل منتج (لوحة التاجر) -->
-<div class="modal-backdrop" id="modal-product">
-  <div class="modal">
-    <div class="modal-head">
-      <h3 id="product-modal-title">إضافة منتج جديد</h3>
-      <button class="modal-close" data-close="modal-product">✕</button>
-    </div>
-    <div class="form-grid">
-      <div class="field" style="grid-column:1/-1;">
-        <label>اسم المنتج</label>
-        <input type="text" id="p-name" placeholder="مثال: فستان صيفي">
-      </div>
-      <div class="field">
-        <label>فئة المنتج</label>
-        <input type="text" id="p-category" placeholder="مثال: ملابس نسائية" list="p-category-list">
-        <datalist id="p-category-list"></datalist>
-      </div>
-      <div class="field">
-        <label>نوع المنتج (الخيارات المتاحة)</label>
-        <input type="text" id="p-variant-type" placeholder="مثال: أحمر، أزرق، أخضر أو S، M، L">
-      </div>
-      <div class="field">
-        <label>السعر</label>
-        <input type="number" id="p-price" placeholder="0" step="0.01">
-      </div>
-      <div class="field">
-        <label>نسبة الخصم % (اختياري)</label>
-        <input type="number" id="p-discount" placeholder="0" step="0.01" min="0" max="100">
-      </div>
-      <div class="field">
-        <label>كمية المخزون</label>
-        <input type="number" id="p-stock" placeholder="0" step="1" min="0">
-      </div>
-      <div class="field">
-        <label>رابط فيديو المنتج (اختياري)</label>
-        <input type="text" id="p-video" placeholder="رابط انستغرام/تيكتوك/يوتيوب...">
-      </div>
-      <div class="field" style="grid-column:1/-1;">
-        <label>وصف المنتج</label>
-        <textarea id="p-description" rows="3" placeholder="وصف مختصر للمنتج..."></textarea>
-      </div>
-    </div>
-    <div class="modal-foot">
-      <button class="btn btn-outline btn-sm" data-close="modal-product">إلغاء</button>
-      <button class="btn btn-primary btn-sm" id="save-product-btn">حفظ المنتج</button>
-    </div>
-  </div>
-</div>
-
-<!-- مودال تقديم بطلب حذف الحساب -->
-<div class="modal-backdrop" id="modal-delete-account">
-  <div class="modal" style="max-width:480px;">
-    <div class="modal-head">
-      <h3>تقديم بطلب حذف الحساب</h3>
-      <button class="modal-close" data-close="modal-delete-account">✕</button>
-    </div>
-
-    <!-- الخطوة 1: التحذير والموافقة على الشروط -->
-    <div id="delete-account-step-warning">
-      <div class="warn-box">
-        ⚠️ أنت على وشك تقديم طلب حذف حسابك نهائيًا. تأكد من قراءة النقاط التالية جيدًا:
-      </div>
-      <ul style="color:var(--ink-soft);font-size:13.5px;padding-inline-start:20px;margin:14px 0;line-height:1.9;">
-        <li>هل أنت متأكد من أنك تريد حذف الحساب؟ ستفقد جميع بياناتك ومنتجاتك وسجل طلباتك نهائيًا.</li>
-        <li>سيخضع طلبك لمراجعة فريق الإدارة قبل تنفيذه.</li>
-        <li>تستغرق عملية الحذف الفعلية من <b>يومين إلى ثلاثة أيام</b> من تاريخ تقديم الطلب.</li>
-        <li>هل أنت متأكد من مخاطر حذف الحساب نهائيًا؟ لا يمكن التراجع عن هذا الإجراء بعد تنفيذه.</li>
-      </ul>
-      <label style="display:flex;align-items:flex-start;gap:8px;font-size:13px;color:var(--ink-soft);cursor:pointer;margin-bottom:6px;">
-        <input type="checkbox" id="delete-account-agree-terms" style="margin-top:3px;">
-        <span>
-          أوافق على
-          <a href="terms.html" target="_blank" rel="noopener" style="color:var(--palm);font-weight:700;">شروط الخدمة</a>
-          بما في ذلك أن حذف الحساب أثناء وجود اشتراك سارٍ لا يُلزم الشركة باسترجاع أي مبالغ مدفوعة عن ذلك الاشتراك.
+    `).join("");
+  } catch (err) {
+    console.error(err);
+    $("#admin-channels-body").innerHTML = `<div class="empty-state" style="padding:24px;"><p>تعذر تحميل حالة القنوات</p></div>`;
+  }
+}
+
+// ---- عرض زبائن متجر معين من لوحة الأدمن ----
+function openCustomersModal(storeId) {
+  const s = state.stores.find(x => x.id === storeId);
+  if (!s) return;
+  $("#customers-modal-title").textContent = `زبائن متجر: ${s.store_name}`;
+  const rows = state.orders.filter(o => o.store_id === s.id);
+  $("#admin-customers-tbody").innerHTML = rows.length ? rows.map(o => `
+    <tr>
+      <td>${escapeHtml(o.name || '—')}</td>
+      <td>${escapeHtml(o.location || '—')}</td>
+      <td style="font-family:var(--font-mono)">${escapeHtml(o.phone || '—')}</td>
+      <td>${statusBadge(o.status)}</td>
+      <td>${fmtTime(o.created_at)}</td>
+    </tr>`).join("") : `<tr><td colspan="5" style="text-align:center;color:var(--ink-soft);padding:24px;">لا يوجد زبائن لهذا المتجر بعد</td></tr>`;
+  $("#modal-store-customers").classList.add("show");
+}
+
+// ---- إعدادات API (Gemini فقط — مبسّطة بطلب المستخدم لتقليل التعقيد واحتمالية الأعطال) ----
+
+function renderApiSettingsTab() {
+  $("#gemini-api-key").value = state.apiSettings.global_gemini_api_key || "";
+  $("#gemini-model").value = state.apiSettings.global_gemini_model || "gemini-3.6-flash";
+  renderAiPoolTable();
+}
+
+// ---------------------------------------------------------
+// مفتاح احتياطي واحد فقط (للضرورة القصوى) — Gemini حصرًا، لا OpenRouter ولا تعقيد إضافي
+// ---------------------------------------------------------
+function renderAiPoolTable() {
+  $("#ai-pool-tbody").innerHTML = state.aiPool.length ? state.aiPool.map(p => `
+    <tr>
+      <td>${escapeHtml(p.label || '—')}</td>
+      <td style="font-family:var(--font-mono);font-size:12.5px;">${escapeHtml(p.model || '—')}</td>
+      <td>${p.enabled ? '<span class="badge ok">مفعّل</span>' : '<span class="badge wait">معطّل</span>'}</td>
+      <td class="row-actions">
+        <button class="btn btn-outline btn-sm" data-toggle-pool="${p.id}">${p.enabled ? 'تعطيل' : 'تفعيل'}</button>
+        <button class="btn btn-bad btn-sm" data-delete-pool="${p.id}">حذف</button>
+      </td>
+    </tr>
+  `).join("") : `<tr><td colspan="4" style="text-align:center;color:var(--ink-soft);padding:24px;">لا يوجد مفتاح احتياطي بعد</td></tr>`;
+
+  $all("[data-toggle-pool]").forEach(b => b.addEventListener("click", async () => {
+    const p = state.aiPool.find(x => x.id === b.dataset.togglePool);
+    try {
+      await SB.update("ai_provider_pool", `id=eq.${p.id}`, { enabled: !p.enabled });
+      await loadAdminData(); renderApiSettingsTab();
+    } catch (err) { console.error(err); toast("تعذر التحديث", "bad"); }
+  }));
+
+  $all("[data-delete-pool]").forEach(b => b.addEventListener("click", async () => {
+    if (!confirm("حذف هذا المفتاح الاحتياطي؟")) return;
+    try {
+      await SB.remove("ai_provider_pool", `id=eq.${b.dataset.deletePool}`);
+      toast("تم الحذف", "ok");
+      await loadAdminData(); renderApiSettingsTab();
+    } catch (err) { console.error(err); toast("تعذر الحذف", "bad"); }
+  }));
+}
+
+$("#add-pool-key").addEventListener("click", async () => {
+  const model = $("#pool-model").value.trim();
+  const apiKey = $("#pool-api-key").value.trim();
+  if (!model || !apiKey) { toast("الرجاء إدخال الموديل والمفتاح", "bad"); return; }
+
+  // نكتفي بمفتاح احتياطي واحد فقط لتقليل التعقيد — إذا كان يوجد مفتاح مسبقًا نستبدله بدل الإضافة عليه
+  try {
+    if (state.aiPool.length > 0) {
+      await SB.remove("ai_provider_pool", `id=eq.${state.aiPool[0].id}`);
+    }
+    await SB.insert("ai_provider_pool", {
+      label: $("#pool-label").value.trim() || "احتياط",
+      provider: "gemini",
+      model,
+      api_key: apiKey,
+      priority: 0,
+      enabled: true,
+    });
+    toast("تم حفظ المفتاح الاحتياطي", "ok");
+    ["pool-label", "pool-model", "pool-api-key"].forEach(id => $(`#${id}`).value = "");
+    await loadAdminData(); renderApiSettingsTab();
+  } catch (err) { console.error(err); toast("تعذر إضافة المفتاح", "bad"); }
+});
+
+async function upsertApiSetting(key_name, key_value) {
+  const rows = await SB.select("api_settings", `key_name=eq.${key_name}&select=id`);
+  if (rows.length) {
+    await SB.update("api_settings", `key_name=eq.${key_name}`, { key_value });
+  } else {
+    await SB.insert("api_settings", { key_name, key_value });
+  }
+}
+
+$("#save-global-api").addEventListener("click", async () => {
+  try {
+    await upsertApiSetting("global_ai_provider", "gemini");
+    await upsertApiSetting("global_gemini_api_key", $("#gemini-api-key").value.trim());
+    await upsertApiSetting("global_gemini_model", $("#gemini-model").value.trim() || "gemini-3.6-flash");
+    toast("تم حفظ المفتاح الأساسي", "ok");
+    await loadAdminData();
+  } catch (err) { console.error(err); toast("تعذر حفظ المفتاح", "bad"); }
+});
+
+// ---- الإعلانات ----
+// ---------------------------------------------------------
+// إدارة القنوات (لوحة الأدمن): إظهار/إخفاء وتفعيل/إغلاق كل قناة عامًا،
+// مع إمكانية استثناء متاجر محددة من الإعداد العام
+// ---------------------------------------------------------
+function getChannelGlobalRow(channel) {
+  return state.channelGlobalSettings.find(r => r.channel === channel) || { visibility: "visible", status: "enabled" };
+}
+
+// أخطاء Supabase/PostgREST تصل كنص JSON خام برسالة err.message (مثال:
+// {"code":"42P01","message":"relation \"channel_global_settings\" does not exist"})
+// هذه الدالة تحاول استخراج الرسالة الحقيقية بدل عرض "تعذر..." عامة لا تشرح شيئًا
+function readableSupabaseError(err) {
+  try {
+    const parsed = JSON.parse(err.message);
+    return parsed.message || parsed.hint || parsed.details || err.message;
+  } catch (e) {
+    return err.message || "خطأ غير معروف";
+  }
+}
+
+// =========================================================
+// تبويب "الاشتراكات" (لوحة الأدمن): أسعار الخطط، أكواد الخصم، وطلبات الاشتراك
+// =========================================================
+state.subscribeFilter = "pending";
+
+function renderSubscriptionsTab() {
+  $("#f-monthly-price").value = state.subscriptionSettings.monthly_price;
+  $("#f-yearly-price").value = state.subscriptionSettings.yearly_price;
+  renderPaymentMethodsSettings();
+  renderDiscountCodesList();
+  renderSubscribeRequestsList();
+  refreshAdminSubscriptionsBadge();
+}
+
+// ---- طرق الدفع ----
+function renderPaymentMethodsSettings() {
+  const pm = state.paymentMethods;
+  $("#pm-card-enabled").checked = !!pm.card_enabled;
+  $("#pm-transfer-enabled").checked = !!pm.direct_transfer_enabled;
+  $("#pm-zaincash-enabled").checked = !!pm.zaincash_enabled;
+  $("#pm-superkey-enabled").checked = !!pm.superkey_enabled;
+  $("#pm-zaincash-number").value = pm.zaincash_wallet_number || "";
+  $("#pm-superkey-number").value = pm.superkey_wallet_number || "";
+  $("#pm-zaincash-qr-preview").src = pm.zaincash_qr_url || "";
+  $("#pm-zaincash-qr-preview").classList.toggle("hidden", !pm.zaincash_qr_url);
+  $("#pm-superkey-qr-preview").src = pm.superkey_qr_url || "";
+  $("#pm-superkey-qr-preview").classList.toggle("hidden", !pm.superkey_qr_url);
+}
+
+$("#btn-save-payment-methods").addEventListener("click", async () => {
+  const btn = $("#btn-save-payment-methods");
+  btn.disabled = true;
+  btn.textContent = "جارٍ الحفظ...";
+
+  try {
+    const patch = {
+      card_enabled: $("#pm-card-enabled").checked,
+      direct_transfer_enabled: $("#pm-transfer-enabled").checked,
+      zaincash_enabled: $("#pm-zaincash-enabled").checked,
+      superkey_enabled: $("#pm-superkey-enabled").checked,
+      zaincash_wallet_number: $("#pm-zaincash-number").value.trim(),
+      superkey_wallet_number: $("#pm-superkey-number").value.trim(),
+      updated_at: new Date().toISOString(),
+    };
+
+    // رفع صور QR الجديدة (إن اختار الأدمن ملفًا) لـ Supabase Storage —
+    // مسار ثابت بدون امتداد لكل مزوّد، upsert=true يستبدل الصورة القديمة تلقائيًا
+    const zcFile = $("#pm-zaincash-qr-file").files[0];
+    if (zcFile) patch.zaincash_qr_url = await SB.uploadFile("payment-uploads", "qr/zaincash-qr", zcFile, true);
+
+    const skFile = $("#pm-superkey-qr-file").files[0];
+    if (skFile) patch.superkey_qr_url = await SB.uploadFile("payment-uploads", "qr/superkey-qr", skFile, true);
+
+    await SB.update("payment_methods_settings", "id=eq.1", patch);
+    state.paymentMethods = { ...state.paymentMethods, ...patch };
+    renderPaymentMethodsSettings();
+    $("#pm-zaincash-qr-file").value = "";
+    $("#pm-superkey-qr-file").value = "";
+    toast("تم حفظ إعدادات الدفع", "ok");
+  } catch (err) {
+    console.error(err);
+    toast(`تعذر الحفظ: ${readableSupabaseError(err)}`, "bad");
+  } finally {
+    btn.disabled = false;
+    btn.textContent = "حفظ إعدادات الدفع";
+  }
+});
+
+// ---- حفظ أسعار الاشتراك ----
+$("#btn-save-sub-prices").addEventListener("click", async () => {
+  const monthly = Number($("#f-monthly-price").value);
+  const yearly = Number($("#f-yearly-price").value);
+  if (!monthly || !yearly || monthly <= 0 || yearly <= 0) { toast("أدخل أسعارًا صحيحة أكبر من صفر", "bad"); return; }
+
+  try {
+    await SB.update("subscription_settings", "id=eq.1", { monthly_price: monthly, yearly_price: yearly, updated_at: new Date().toISOString() });
+    state.subscriptionSettings = { monthly_price: monthly, yearly_price: yearly };
+    toast("تم حفظ الأسعار", "ok");
+  } catch (err) {
+    console.error(err);
+    toast(`تعذر حفظ الأسعار: ${readableSupabaseError(err)}`, "bad");
+  }
+});
+
+// ---- أكواد الخصم ----
+function renderDiscountCodesList() {
+  $("#discount-codes-count-label").textContent = `${state.discountCodes.length} كود`;
+  const host = $("#discount-codes-list");
+  if (!state.discountCodes.length) { host.innerHTML = `<p style="color:var(--ink-soft);font-size:13px;">لا توجد أكواد خصم بعد.</p>`; return; }
+
+  host.innerHTML = state.discountCodes.map(c => `
+    <div class="checkbox-row" style="justify-content:space-between;padding:10px 0;border-bottom:1px solid var(--line);">
+      <div>
+        <b style="font-family:var(--font-mono);">${escapeHtml(c.code)}</b>
+        <span style="color:var(--ink-soft);font-size:12.5px;margin-inline-start:8px;">
+          ${c.discount_type === "percent" ? `خصم ${c.discount_value}%` : `خصم ${Number(c.discount_value).toLocaleString("en-US")} د.ع`}
         </span>
-      </label>
-      <div class="modal-foot">
-        <button class="btn btn-outline btn-sm" data-close="modal-delete-account">إلغاء</button>
-        <button class="btn btn-bad btn-sm" id="btn-delete-account-continue">متابعة</button>
+        <span class="badge ${c.active ? "ok" : "bad"}" style="margin-inline-start:8px;">${c.active ? "مفعّل" : "معطّل"}</span>
+      </div>
+      <div style="display:flex;gap:6px;">
+        <button class="btn btn-outline btn-sm" data-toggle-discount="${escapeHtml(c.code)}" data-active="${c.active}" style="width:auto;padding:6px 12px;">${c.active ? "تعطيل" : "تفعيل"}</button>
+        <button class="btn btn-bad btn-sm" data-delete-discount="${escapeHtml(c.code)}" style="width:auto;padding:6px 12px;">حذف</button>
+      </div>
+    </div>`).join("");
+}
+
+$("#btn-add-discount-code").addEventListener("click", async () => {
+  const code = $("#f-discount-code").value.trim().toUpperCase();
+  const discount_type = $("#f-discount-type").value;
+  const discount_value = Number($("#f-discount-value").value);
+
+  if (!code) { toast("أدخل الكود", "bad"); return; }
+  if (!discount_value || discount_value <= 0) { toast("أدخل قيمة خصم صحيحة", "bad"); return; }
+
+  try {
+    await SB.insert("discount_codes", { code, discount_type, discount_value, active: true });
+    state.discountCodes.unshift({ code, discount_type, discount_value, active: true, created_at: new Date().toISOString() });
+    renderDiscountCodesList();
+    $("#f-discount-code").value = "";
+    $("#f-discount-value").value = "";
+    toast("تمت إضافة الكود", "ok");
+  } catch (err) {
+    console.error(err);
+    toast(`تعذر إضافة الكود: ${readableSupabaseError(err)}`, "bad");
+  }
+});
+
+$("#discount-codes-list").addEventListener("click", async (e) => {
+  const toggleCode = e.target.dataset.toggleDiscount;
+  const deleteCode = e.target.dataset.deleteDiscount;
+
+  if (toggleCode) {
+    const newActive = e.target.dataset.active !== "true";
+    try {
+      await SB.update("discount_codes", `code=eq.${encodeURIComponent(toggleCode)}`, { active: newActive });
+      const row = state.discountCodes.find(c => c.code === toggleCode);
+      if (row) row.active = newActive;
+      renderDiscountCodesList();
+    } catch (err) {
+      console.error(err);
+      toast("تعذر تحديث الكود", "bad");
+    }
+  }
+
+  if (deleteCode) {
+    if (!confirm(`حذف كود الخصم "${deleteCode}"؟`)) return;
+    try {
+      await SB.remove("discount_codes", `code=eq.${encodeURIComponent(deleteCode)}`);
+      state.discountCodes = state.discountCodes.filter(c => c.code !== deleteCode);
+      renderDiscountCodesList();
+      toast("تم الحذف", "ok");
+    } catch (err) {
+      console.error(err);
+      toast("تعذر حذف الكود", "bad");
+    }
+  }
+});
+
+// ---- طلبات الاشتراك ----
+$all("#subscribe-filter-tabs .tab-btn").forEach(b => b.addEventListener("click", () => {
+  $all("#subscribe-filter-tabs .tab-btn").forEach(x => x.classList.remove("active"));
+  b.classList.add("active");
+  state.subscribeFilter = b.dataset.status;
+  renderSubscribeRequestsList();
+}));
+
+function renderSubscribeRequestsList() {
+  const filtered = state.subscribeFilter === "all"
+    ? state.subscribeRequests
+    : state.subscribeRequests.filter(r => r.status === state.subscribeFilter);
+
+  $("#subscribe-requests-count-label").textContent = `${filtered.length} طلب`;
+  const host = $("#subscribe-requests-list");
+
+  if (!filtered.length) { host.innerHTML = `<p style="color:var(--ink-soft);font-size:13px;">لا توجد طلبات هنا حاليًا.</p>`; return; }
+
+  const providerLabel = { zaincash: "زين كاش", superkey: "سوبر كي", card: "بطاقة" };
+
+  host.innerHTML = filtered.map(r => `
+    <div class="panel" style="margin-bottom:10px;border:1px solid var(--line);">
+      <div style="display:flex;justify-content:space-between;align-items:flex-start;flex-wrap:wrap;gap:10px;">
+        <div>
+          <b>${escapeHtml(r.full_name)}</b> — <span style="font-family:var(--font-mono);">${escapeHtml(r.phone)}</span>
+          <div style="color:var(--ink-soft);font-size:12.5px;margin-top:4px;">
+            ${escapeHtml(r.governorate)} - ${escapeHtml(r.area)} · ${r.subscription_type === "year" ? "سنوي" : "شهري"} ·
+            ${Number(r.price).toLocaleString("en-US")} د.ع
+            ${r.discount_code ? ` · كود: ${escapeHtml(r.discount_code)}` : ""}
+            ${r.payment_method ? ` · عبر ${providerLabel[r.payment_method] || escapeHtml(r.payment_method)}` : ""}
+            · ${new Date(r.created_at).toLocaleString("ar-IQ")}
+          </div>
+          ${r.transfer_screenshot_url ? `<a href="${r.transfer_screenshot_url}" target="_blank" rel="noopener" style="display:inline-block;margin-top:8px;"><img src="${r.transfer_screenshot_url}" style="max-width:90px;border-radius:8px;border:1px solid var(--line);" /></a>` : ""}
+          ${r.transfer_reference_name ? `<div style="font-size:12.5px;color:var(--ink-soft);margin-top:6px;">اسم/رقم العملية: <b>${escapeHtml(r.transfer_reference_name)}</b></div>` : ""}
+        </div>
+        <div style="display:flex;align-items:center;gap:8px;">
+          <span class="badge ${r.status === "paid" ? "ok" : "wait"}">${r.status === "paid" ? "مفعّل" : "قيد الانتظار"}</span>
+          ${r.status === "pending" ? `
+            <button class="btn btn-primary btn-sm" data-activate-sub="${r.id}" style="width:auto;padding:7px 14px;">موافقة</button>
+            <button class="btn btn-outline btn-sm" data-contact-sub="${escapeHtml(r.phone)}" style="width:auto;padding:7px 14px;">تواصل</button>
+          ` : ""}
+        </div>
+      </div>
+    </div>`).join("");
+}
+
+$("#subscribe-requests-list").addEventListener("click", async (e) => {
+  const activateId = e.target.dataset.activateSub;
+  const contactPhone = e.target.dataset.contactSub;
+
+  if (activateId) {
+    const req = state.subscribeRequests.find(r => r.id === activateId);
+    if (!req) return;
+    if (!confirm(`تأكيد استلام الدفعة وتفعيل اشتراك "${req.full_name}"؟`)) return;
+    try {
+      // تحديث status إلى paid يشغّل تلقائيًا trigger بقاعدة البيانات يحدّث
+      // جدول stores (plan + subscribed_at)، والذي بدوره يحسب expires_at
+      // ويفعّل is_active تلقائيًا (راجع sql/subscriptions_billing.sql)
+      await SB.update("subscribe", `id=eq.${activateId}`, { status: "paid", reviewed_at: new Date().toISOString() });
+      req.status = "paid";
+      const store = state.stores.find(s => s.phone === req.phone);
+      if (store) { store.plan = req.subscription_type; store.is_active = true; }
+      renderSubscribeRequestsList();
+      renderStoresGrid();
+      toast("تم تفعيل الاشتراك", "ok");
+    } catch (err) {
+      console.error(err);
+      toast(`تعذر التفعيل: ${readableSupabaseError(err)}`, "bad");
+    }
+  }
+
+  if (contactPhone) {
+    // يفتح محادثة واتساب مباشرة مع نفس الرقم المضاف بالطلب
+    const digits = contactPhone.replace(/\D/g, "").replace(/^0/, "964");
+    window.open(`https://wa.me/${digits}`, "_blank", "noopener");
+  }
+});
+
+function refreshAdminSubscriptionsBadge() {
+  const pendingCount = state.subscribeRequests.filter(r => r.status === "pending").length;
+  const navBtn = $(`.nav-item[data-tab="a-subscriptions"]`);
+  if (navBtn) navBtn.classList.toggle("has-notif", pendingCount > 0);
+}
+
+function renderChannelsTab() {
+  $("#admin-channels-list").innerHTML = ALL_CHANNELS.map(channel => {
+    const g = getChannelGlobalRow(channel);
+    const overridesCount = state.channelOverrides.filter(o => o.channel === channel).length;
+    return `
+    <div class="mini-product" style="align-items:center;flex-wrap:wrap;gap:14px;">
+      <div class="info" style="min-width:110px;">
+        <b>${METACHANNEL_LABELS[channel]}</b>
+        <span>${overridesCount ? `${overridesCount} استثناء لمتاجر محددة` : "بدون استثناءات"}</span>
+      </div>
+      <div class="channel-ai-row" style="border:none;padding:0;margin:0;">
+        <span>ظاهرة للتجار</span>
+        <label class="switch">
+          <input type="checkbox" class="channel-visibility-toggle" data-channel="${channel}" ${g.visibility !== "hidden" ? "checked" : ""}>
+          <span class="slider"></span>
+        </label>
+      </div>
+      <div class="channel-ai-row" style="border:none;padding:0;margin:0;">
+        <span>مفتوحة للربط</span>
+        <label class="switch">
+          <input type="checkbox" class="channel-status-toggle" data-channel="${channel}" ${g.status !== "disabled" ? "checked" : ""}>
+          <span class="slider"></span>
+        </label>
+      </div>
+      <button class="btn btn-outline btn-sm" data-open-override="${channel}">استثناءات لمتاجر محددة</button>
+    </div>`;
+  }).join("");
+}
+
+async function upsertChannelGlobalSetting(channel, patch) {
+  const exists = state.channelGlobalSettings.some(r => r.channel === channel);
+  const payload = { channel, visibility: "visible", status: "enabled", ...patch, updated_at: new Date().toISOString() };
+  if (exists) {
+    await SB.update("channel_global_settings", `channel=eq.${channel}`, payload);
+  } else {
+    await SB.insert("channel_global_settings", payload);
+  }
+}
+
+$("#admin-channels-list").addEventListener("change", async (e) => {
+  const channel = e.target.dataset.channel;
+  if (!channel) return;
+  try {
+    if (e.target.classList.contains("channel-visibility-toggle")) {
+      await upsertChannelGlobalSetting(channel, { visibility: e.target.checked ? "visible" : "hidden" });
+    } else if (e.target.classList.contains("channel-status-toggle")) {
+      await upsertChannelGlobalSetting(channel, { status: e.target.checked ? "enabled" : "disabled" });
+    } else {
+      return;
+    }
+    await loadAdminData();
+    renderChannelsTab();
+    toast("تم تحديث إعداد القناة", "ok");
+  } catch (err) {
+    console.error(err);
+    toast(`تعذر تحديث إعداد القناة: ${readableSupabaseError(err)}`, "bad");
+    renderChannelsTab(); // إعادة الحالة القديمة بصريًا لأن الحفظ فشل
+  }
+});
+
+$("#admin-channels-list").addEventListener("click", (e) => {
+  const channel = e.target.dataset.openOverride;
+  if (channel) openChannelOverrideModal(channel);
+});
+
+function openChannelOverrideModal(channel) {
+  state.channelOverrideModalChannel = channel;
+  $("#channel-override-title").textContent = `(${METACHANNEL_LABELS[channel]})`;
+  $("#ov-store-select").innerHTML = state.stores.map(s => `<option value="${s.id}">${escapeHtml(s.store_name)}</option>`).join("");
+  $("#ov-visibility-select").value = "";
+  $("#ov-status-select").value = "";
+  renderChannelOverrideList(channel);
+  $("#modal-channel-override").classList.add("show");
+}
+
+function renderChannelOverrideList(channel) {
+  const rows = state.channelOverrides.filter(o => o.channel === channel);
+  $("#channel-override-list").innerHTML = rows.length ? rows.map(o => {
+    const storeName = state.stores.find(s => s.id === o.store_id)?.store_name || "متجر محذوف";
+    const parts = [];
+    if (o.visibility) parts.push(o.visibility === "hidden" ? "مخفية" : "ظاهرة دائمًا");
+    if (o.status) parts.push(o.status === "disabled" ? "مغلقة دائمًا" : "مفتوحة دائمًا");
+    return `
+    <div class="mini-product">
+      <div class="info">
+        <b>${escapeHtml(storeName)}</b>
+        <span>${parts.join(" — ") || "بدون تخصيص"}</span>
+      </div>
+      <button class="btn btn-bad btn-sm" data-remove-override="${o.store_id}">إزالة</button>
+    </div>`;
+  }).join("") : `<div class="empty-state"><p>لا توجد استثناءات لهذه القناة</p></div>`;
+}
+
+// تحديث معالج حفظ الاستثناءات بجدول channel_store_overrides
+$("#btn-save-override").addEventListener("click", async () => {
+  const channel = state.channelOverrideModalChannel;
+  const storeId = $("#ov-store-select").value;
+  const visibility = $("#ov-visibility-select").value || null;
+  const status = $("#ov-status-select").value || null;
+  
+  if (!storeId) { 
+    toast("اختر متجرًا أولًا", "bad"); 
+    return; 
+  }
+  if (!visibility && !status) { 
+    toast("اختر إظهارًا أو حالة لتخصيصها، أو استخدم زر الإزالة لحذف استثناء قائم", "bad"); 
+    return; 
+  }
+
+  try {
+    const exists = state.channelOverrides.some(o => o.store_id === storeId && o.channel === channel);
+    const payload = { 
+      store_id: storeId, 
+      channel: channel, 
+      visibility: visibility, 
+      status: status, 
+      updated_at: new Date().toISOString() 
+    };
+
+    if (exists) {
+      await SB.update("channel_store_overrides", `store_id=eq.${storeId}&channel=eq.${channel}`, payload);
+    } else {
+      await SB.insert("channel_store_overrides", payload);
+    }
+
+    await loadAdminData();
+    renderChannelsTab();
+    renderChannelOverrideList(channel);
+    toast("تم حفظ الاستثناء بنجاح", "ok");
+  } catch (err) {
+    console.error(err);
+    toast(`تعذر حفظ الاستثناء: ${readableSupabaseError(err)}`, "bad");
+  }
+});
+
+$("#channel-override-list").addEventListener("click", async (e) => {
+  const storeId = e.target.dataset.removeOverride;
+  if (!storeId) return;
+  const channel = state.channelOverrideModalChannel;
+  try {
+    await SB.remove("channel_store_overrides", `store_id=eq.${storeId}&channel=eq.${channel}`);
+    await loadAdminData();
+    renderChannelsTab();
+    renderChannelOverrideList(channel);
+    toast("تمت إزالة الاستثناء", "ok");
+  } catch (err) {
+    console.error(err);
+    toast(`تعذر إزالة الاستثناء: ${readableSupabaseError(err)}`, "bad");
+  }
+});
+
+function renderAnnouncementsTab() {
+  const select = $("#ann-target");
+  select.innerHTML = `<option value="">جميع المتاجر (عام)</option>` +
+    state.stores.map(s => `<option value="${s.id}">${escapeHtml(s.store_name)}</option>`).join("");
+
+  $("#announcements-list").innerHTML = state.announcements.length ? state.announcements.map(a => {
+    const target = a.store_id ? (state.stores.find(s => s.id === a.store_id)?.store_name || "متجر محذوف") : "جميع المتاجر";
+    return `
+    <div class="mini-product" style="align-items:flex-start;">
+      <div class="info">
+        <b>${escapeHtml(a.title)} <span style="font-weight:400;color:var(--ink-soft);">— ${escapeHtml(target)}</span></b>
+        <span style="font-family:var(--font-display);color:var(--ink);">${escapeHtml(a.message)}</span><br>
+        <span>${fmtTime(a.created_at)}</span>
+      </div>
+      <button class="btn btn-bad btn-sm" data-delete-announcement="${a.id}" style="flex-shrink:0;">حذف</button>
+    </div>`;
+  }).join("") : `<div class="empty-state"><p>لم يتم نشر أي إعلان بعد</p></div>`;
+
+  $all("[data-delete-announcement]").forEach(b => b.addEventListener("click", () => deleteAnnouncement(b.dataset.deleteAnnouncement)));
+}
+
+async function deleteAnnouncement(id) {
+  if (!confirm("هل تريد حذف هذا الإعلان نهائيًا؟")) return;
+  try {
+    await SB.remove("announcements", `id=eq.${id}`);
+    toast("تم حذف الإعلان", "ok");
+    await loadAdminData();
+    renderAnnouncementsTab();
+  } catch (err) {
+    console.error(err);
+    toast("تعذر حذف الإعلان", "bad");
+  }
+}
+
+$("#send-announcement").addEventListener("click", async () => {
+  const title = $("#ann-title").value.trim();
+  const message = $("#ann-message").value.trim();
+  const store_id = $("#ann-target").value || null;
+  if (!title || !message) { toast("الرجاء إدخال العنوان والنص", "bad"); return; }
+
+  try {
+    await SB.insert("announcements", { title, message, store_id });
+    toast("تم نشر الإعلان", "ok");
+    $("#ann-title").value = ""; $("#ann-message").value = "";
+    await loadAdminData();
+    renderAnnouncementsTab();
+  } catch (err) { console.error(err); toast("تعذر نشر الإعلان", "bad"); }
+});
+
+// =========================================================
+// رسائل واتساب (لوحة الأدمن) — ربط أي رقم وإرسال جماعي/فردي
+// =========================================================
+
+// =========================================================
+// ربط رقم رموز التحقق (OTP) — جلسة منفصلة عن رقم رسائل واتساب أعلاه
+// =========================================================
+
+function initWaMessagesTab() {
+  refreshOtpAdminSenderStatus();
+  refreshWaAdminSenderStatus();
+  updateWaRecipientCount();
+}
+
+function showOtpAdminState(uiState) {
+  // uiState: 'disconnected' | 'loading' | 'qr' | 'connected'
+  $("#otp-admin-state-disconnected").classList.toggle("hidden", uiState !== "disconnected");
+  $("#otp-admin-state-loading").classList.toggle("hidden", uiState !== "loading");
+  $("#otp-admin-state-qr").classList.toggle("hidden", uiState !== "qr");
+  $("#otp-admin-state-connected").classList.toggle("hidden", uiState !== "connected");
+}
+
+function applyOtpAdminSenderStatus(res) {
+  if (res.status === "connected") {
+    $("#otp-admin-connected-number").textContent = res.number ? `الرقم المرتبط: ${res.number}` : "";
+    showOtpAdminState("connected");
+    stopOtpAdminSenderPolling();
+  } else if (res.status === "qr" && res.qr) {
+    $("#otp-admin-qr-img").src = res.qr;
+    showOtpAdminState("qr");
+    startOtpAdminSenderPolling();
+  } else if (res.status === "connecting") {
+    showOtpAdminState("loading");
+    startOtpAdminSenderPolling();
+  } else {
+    showOtpAdminState("disconnected");
+    stopOtpAdminSenderPolling();
+  }
+}
+
+async function refreshOtpAdminSenderStatus() {
+  try {
+    const res = await OtpAPI.senderStatus();
+    applyOtpAdminSenderStatus(res);
+  } catch (err) {
+    console.error(err);
+    showOtpAdminState("disconnected");
+    stopOtpAdminSenderPolling();
+  }
+}
+
+function startOtpAdminSenderPolling() {
+  if (state.otpAdminSenderPollTimer) return;
+  state.otpAdminSenderPollTimer = setInterval(refreshOtpAdminSenderStatus, 4000);
+}
+function stopOtpAdminSenderPolling() {
+  if (state.otpAdminSenderPollTimer) { clearInterval(state.otpAdminSenderPollTimer); state.otpAdminSenderPollTimer = null; }
+}
+
+$("#btn-otp-admin-connect").addEventListener("click", async () => {
+  showOtpAdminState("loading");
+  try {
+    // استدعاء الحالة يبدأ الجلسة تلقائيًا بالسيرفر (نفس منطق رقم الإرسال الجماعي)
+    const res = await OtpAPI.senderStatus();
+    applyOtpAdminSenderStatus(res);
+  } catch (err) {
+    console.error(err);
+    toast("تعذر الاتصال بسيرفر الربط", "bad");
+    showOtpAdminState("disconnected");
+  }
+});
+
+$("#btn-otp-admin-refresh-qr").addEventListener("click", refreshOtpAdminSenderStatus);
+
+$("#btn-otp-admin-disconnect").addEventListener("click", async () => {
+  if (!confirm("هل تريد فصل رقم إرسال رموز التحقق؟ ستحتاج لمسح رمز جديد لربط رقم آخر.")) return;
+  try {
+    await OtpAPI.disconnectSender();
+    toast("تم فصل الرقم", "ok");
+    showOtpAdminState("disconnected");
+  } catch (err) {
+    console.error(err);
+    toast("تعذر فصل الرقم", "bad");
+  }
+});
+
+function showWaAdminState(uiState) {
+  // uiState: 'disconnected' | 'loading' | 'qr' | 'connected'
+  $("#wa-admin-state-disconnected").classList.toggle("hidden", uiState !== "disconnected");
+  $("#wa-admin-state-loading").classList.toggle("hidden", uiState !== "loading");
+  $("#wa-admin-state-qr").classList.toggle("hidden", uiState !== "qr");
+  $("#wa-admin-state-connected").classList.toggle("hidden", uiState !== "connected");
+}
+
+async function refreshWaAdminSenderStatus() {
+  try {
+    const res = await AdminWaAPI.status();
+    applyWaAdminSenderStatus(res);
+  } catch (err) {
+    console.error(err);
+    showWaAdminState("disconnected");
+  }
+}
+
+function applyWaAdminSenderStatus(res) {
+  if (res.status === "connected") {
+    $("#wa-admin-connected-number").textContent = res.number ? `الرقم المرتبط: ${res.number}` : "";
+    showWaAdminState("connected");
+    stopWaAdminSenderPolling();
+  } else if (res.status === "qr" && res.qr) {
+    $("#wa-admin-qr-img").src = res.qr;
+    showWaAdminState("qr");
+    startWaAdminSenderPolling();
+  } else if (res.status === "connecting" || res.status === "pending") {
+    showWaAdminState("loading");
+    startWaAdminSenderPolling();
+  } else {
+    showWaAdminState("disconnected");
+    stopWaAdminSenderPolling();
+  }
+}
+
+function startWaAdminSenderPolling() {
+  if (state.waAdminSenderPollTimer) return;
+  state.waAdminSenderPollTimer = setInterval(refreshWaAdminSenderStatus, 4000);
+}
+function stopWaAdminSenderPolling() {
+  if (state.waAdminSenderPollTimer) { clearInterval(state.waAdminSenderPollTimer); state.waAdminSenderPollTimer = null; }
+}
+
+$("#btn-wa-admin-connect").addEventListener("click", async () => {
+  showWaAdminState("loading");
+  try {
+    // بدء الجلسة يستغرق حتى 12 ثانية بالسيرفر قبل إرجاع QR أو حالة الاتصال
+    const res = await AdminWaAPI.status();
+    applyWaAdminSenderStatus(res);
+  } catch (err) {
+    console.error(err);
+    toast("تعذر الاتصال بسيرفر الربط. تحقق من إعدادات LINK_SERVER بملف config.js", "bad");
+    showWaAdminState("disconnected");
+  }
+});
+
+$("#btn-wa-admin-refresh-qr").addEventListener("click", async () => {
+  showWaAdminState("loading");
+  try {
+    const res = await AdminWaAPI.status();
+    applyWaAdminSenderStatus(res);
+  } catch (err) {
+    console.error(err);
+    toast("تعذر تحديث رمز الربط", "bad");
+  }
+});
+
+$("#btn-wa-admin-disconnect").addEventListener("click", async () => {
+  if (!confirm("هل تريد فصل الرقم المربوط؟ ستحتاج لمسح رمز جديد لربط رقم آخر.")) return;
+  try {
+    await AdminWaAPI.disconnect();
+    toast("تم فصل الرقم", "ok");
+    showWaAdminState("disconnected");
+  } catch (err) {
+    console.error(err);
+    toast("تعذر فصل الرقم", "bad");
+  }
+});
+
+// ---- تحديد الجهة المستهدفة للإرسال ----
+$("#wa-msg-target").addEventListener("change", () => {
+  const isCustom = $("#wa-msg-target").value === "custom";
+  $("#wa-msg-custom-phone-field").classList.toggle("hidden", !isCustom);
+  updateWaRecipientCount();
+});
+
+function updateWaRecipientCount() {
+  const target = $("#wa-msg-target").value;
+  const label = $("#wa-msg-recipient-count");
+  if (target === "all") {
+    const count = state.stores.filter(s => s.phone).length;
+    label.textContent = `سيتم الإرسال إلى ${count} رقم متجر مسجّل بالمنصة`;
+  } else {
+    label.textContent = "";
+  }
+}
+
+// ---- إرسال الرسالة (فردي لرقم مخصص أو جماعي لكل المسجلين) ----
+$("#btn-wa-msg-send").addEventListener("click", async () => {
+  const target = $("#wa-msg-target").value;
+  const message = $("#wa-msg-text").value.trim();
+  if (!message) { toast("الرجاء كتابة نص الرسالة", "bad"); return; }
+
+  const btn = $("#btn-wa-msg-send");
+
+  if (target === "custom") {
+    const phone = $("#wa-msg-custom-phone").value.trim();
+    const v = validatePhone(phone);
+    if (!v.valid) { toast(v.msg, "bad"); return; }
+
+    btn.disabled = true; btn.textContent = "جارٍ الإرسال...";
+    try {
+      await AdminWaAPI.sendOne(phone, message);
+      toast("تم إرسال الرسالة", "ok");
+      $("#wa-msg-text").value = "";
+    } catch (err) {
+      console.error(err);
+      if (err.data?.error === "sender_not_connected") {
+        toast("لا يوجد رقم مربوط حاليًا. اربط رقمًا أولاً من الأعلى.", "bad");
+      } else {
+        toast("تعذر إرسال الرسالة", "bad");
+      }
+    } finally {
+      btn.disabled = false; btn.textContent = "إرسال";
+    }
+    return;
+  }
+
+  // إرسال جماعي لكل أرقام المتاجر المسجّلة بالمنصة
+  const phones = state.stores.map(s => s.phone).filter(Boolean);
+  if (phones.length === 0) { toast("لا يوجد أي رقم متجر مسجّل حاليًا", "bad"); return; }
+  if (!confirm(`سيتم إرسال هذه الرسالة إلى ${phones.length} رقم. هل تريد المتابعة؟`)) return;
+
+  btn.disabled = true; btn.textContent = "جارٍ البدء...";
+  try {
+    const res = await AdminWaAPI.sendBulk(phones, message);
+    toast(`بدأ الإرسال إلى ${res.total} رقم`, "ok");
+    startWaAdminBulkPolling();
+  } catch (err) {
+    console.error(err);
+    if (err.data?.error === "sender_not_connected") {
+      toast("لا يوجد رقم مربوط حاليًا. اربط رقمًا أولاً من الأعلى.", "bad");
+    } else if (err.data?.error === "job_in_progress") {
+      toast("توجد عملية إرسال جماعي جارية بالفعل، انتظر انتهاءها", "bad");
+      startWaAdminBulkPolling();
+    } else {
+      toast("تعذر بدء الإرسال الجماعي", "bad");
+    }
+  } finally {
+    btn.disabled = false; btn.textContent = "إرسال";
+  }
+});
+
+function startWaAdminBulkPolling() {
+  $("#wa-bulk-progress").classList.remove("hidden");
+  if (state.waAdminBulkPollTimer) return;
+  state.waAdminBulkPollTimer = setInterval(refreshWaAdminBulkStatus, 2000);
+  refreshWaAdminBulkStatus();
+}
+function stopWaAdminBulkPolling() {
+  if (state.waAdminBulkPollTimer) { clearInterval(state.waAdminBulkPollTimer); state.waAdminBulkPollTimer = null; }
+}
+
+async function refreshWaAdminBulkStatus() {
+  try {
+    const job = await AdminWaAPI.bulkStatus();
+    if (!job.exists) { stopWaAdminBulkPolling(); $("#wa-bulk-progress").classList.add("hidden"); return; }
+
+    const percent = job.total ? Math.round(((job.sent + job.failed) / job.total) * 100) : 0;
+    $("#wa-bulk-progress-bar").style.width = `${percent}%`;
+    $("#wa-bulk-progress-label").textContent = job.done
+      ? `اكتمل الإرسال: ${job.sent} ناجحة، ${job.failed} فاشلة من أصل ${job.total}`
+      : `جارٍ الإرسال: ${job.sent + job.failed} من ${job.total} (${job.sent} ناجحة، ${job.failed} فاشلة)`;
+
+    if (job.done) {
+      stopWaAdminBulkPolling();
+      toast("اكتمل الإرسال الجماعي", "ok");
+    }
+  } catch (err) {
+    console.error(err);
+    stopWaAdminBulkPolling();
+  }
+}
+
+// ---- الشكاوى (عرض الأدمن) ----
+function renderComplaintsTab() {
+  $("#complaints-tbody").innerHTML = state.complaints.length ? state.complaints.map(c => `
+    <tr>
+      <td>${escapeHtml(c.store_name || '—')}</td>
+      <td>${escapeHtml(c.subject || '—')}</td>
+      <td style="max-width:260px;">${escapeHtml(c.message)}</td>
+      <td>${c.status === 'resolved' ? '<span class="badge ok">تم الحل</span>' : '<span class="badge wait">مفتوحة</span>'}</td>
+      <td>${fmtTime(c.created_at)}</td>
+      <td>${c.status !== 'resolved' ? `<button class="btn btn-ok btn-sm" data-resolve="${c.id}">تعليم كمحلولة</button>` : '—'}</td>
+    </tr>
+  `).join("") : `<tr><td colspan="6" style="text-align:center;color:var(--ink-soft);padding:24px;">لا توجد شكاوى حاليًا</td></tr>`;
+
+  $all("[data-resolve]").forEach(b => b.addEventListener("click", async () => {
+    try {
+      await SB.update("complaints", `id=eq.${b.dataset.resolve}`, { status: "resolved" });
+      toast("تم تحديث حالة الشكوى", "ok");
+      await loadAdminData(); renderComplaintsTab(); refreshAdminComplaintsBadge();
+    } catch (err) { console.error(err); toast("تعذر التحديث", "bad"); }
+  }));
+}
+
+// ---------------------------------------------------------
+// إشعار "شكوى جديدة" (نقطة حمراء) بلوحة الأدمن
+// ---------------------------------------------------------
+function adminComplaintsSeenKey() {
+  return `wb_admin_complaints_seen_${state.session?.data?.id || "default"}`;
+}
+
+function refreshAdminComplaintsBadge() {
+  const dot = $("#notif-dot-a-complaints");
+  const navBtn = $(`.nav-item[data-tab="a-complaints"]`);
+  if (!dot || !navBtn) return;
+  const lastSeen = localStorage.getItem(adminComplaintsSeenKey());
+  const hasNew = state.complaints.some(c => !lastSeen || new Date(c.created_at) > new Date(lastSeen));
+  navBtn.classList.toggle("has-notif", hasNew);
+}
+
+function markAdminComplaintsSeen() {
+  localStorage.setItem(adminComplaintsSeenKey(), new Date().toISOString());
+  refreshAdminComplaintsBadge();
+}
+
+// =========================================================
+// ============  قسم لوحة المتجر (Store)  ===================
+// =========================================================
+
+async function enterStore() {
+  showScreen("screen-store");
+  const s = state.session.data;
+  $("#store-name-label").textContent = s.store_name;
+  $("#store-mobile-name").textContent = s.store_name;
+  $("#store-side-name").textContent = s.store_name;
+  await loadStoreData();
+  renderStoreOverview();
+  renderStoreInfo();
+  renderProductsTab();
+  renderMyComplaints();
+  renderStoreAnnouncementBanner();
+  renderStoreSubscriptionBadge();
+  setChannelCardStatus("wa", "disconnected", "غير متصل");
+  setChannelCardStatus("messenger", "disconnected", "غير متصل");
+  setChannelCardStatus("instagram", "disconnected", "غير متصل");
+  setChannelCardStatus("telegram", "disconnected", "غير متصل");
+  setChannelCardStatus("tiktok", "disconnected", "غير متصل");
+  refreshWaStatus();
+  refreshMetaStatus();
+  refreshChannelAvailability();
+  startOrdersPolling();
+  refreshStoreAnnouncementsBadge();
+}
+
+// تحديث تلقائي لسجل الطلبات في لوحة صاحب المتجر، دون الحاجة لتحديث الصفحة يدويًا
+function startOrdersPolling() {
+  if (state.ordersPollTimer) clearInterval(state.ordersPollTimer);
+  state.ordersPollTimer = setInterval(refreshStoreOrders, 8000);
+}
+function stopOrdersPolling() {
+  if (state.ordersPollTimer) { clearInterval(state.ordersPollTimer); state.ordersPollTimer = null; }
+}
+async function refreshStoreOrders() {
+  if (!state.session || state.session.role !== "store") return;
+  const storeId = state.session.data.id;
+  try {
+    const orders = await SB.select("orders", `store_id=eq.${storeId}&select=*&order=created_at.desc`);
+    state.orders = orders;
+    renderStoreOverview();
+  } catch (err) {
+    console.error(err); // فشل تحديث صامت حتى لا يزعج التاجر بإشعارات متكررة
+  }
+  // فحص دوري لأي إعلان جديد لإظهار النقطة الحمراء دون الحاجة لتحديث الصفحة
+  try {
+    const [targeted, general] = await Promise.all([
+      SB.select("announcements", `store_id=eq.${storeId}&select=*&order=created_at.desc`),
+      SB.select("announcements", "store_id=is.null&select=*&order=created_at.desc&limit=5"),
+    ]);
+    state.announcements = [...targeted, ...general].sort((a, b) => new Date(b.created_at) - new Date(a.created_at));
+    renderStoreAnnouncementBanner();
+    if (!$("#tab-s-announcements").classList.contains("hidden")) renderStoreAnnouncementsTab();
+    refreshStoreAnnouncementsBadge();
+  } catch (err) {
+    console.error(err);
+  }
+}
+
+async function loadStoreData() {
+  const storeId = state.session.data.id;
+  try {
+    const [orders, complaints, announcements, products, subSettingsRows] = await Promise.all([
+      SB.select("orders", `store_id=eq.${storeId}&select=*&order=created_at.desc`),
+      SB.select("complaints", `store_id=eq.${storeId}&select=*&order=created_at.desc`),
+      SB.select("announcements", `store_id=eq.${storeId}&select=*&order=created_at.desc`),
+      SB.select("products", `store_id=eq.${storeId}&select=*&order=created_at.desc`),
+      SB.select("subscription_settings", "id=eq.1&select=*"),
+    ]);
+    state.orders = orders;
+    state.complaints = complaints;
+    state.products = products;
+    state.subscriptionSettings = (subSettingsRows && subSettingsRows[0]) || { monthly_price: 15000, yearly_price: 170000 };
+
+    // نجيب أيضا الإعلانات العامة (store_id فاضي)
+    const generalAnn = await SB.select("announcements", "store_id=is.null&select=*&order=created_at.desc&limit=5");
+    state.announcements = [...announcements, ...generalAnn].sort((a, b) => new Date(b.created_at) - new Date(a.created_at));
+  } catch (err) {
+    console.error(err);
+    toast("تعذر تحميل بيانات المتجر", "bad");
+  }
+}
+
+$all(".nav-item[data-tab^='s-']").forEach(btn => {
+  btn.addEventListener("click", () => {
+    switchTab("s", btn.dataset.tab, "store-sidebar");
+    if (btn.dataset.tab === "s-whatsapp") { refreshWaStatus(); refreshMetaStatus(); refreshChannelAvailability(); }
+    if (btn.dataset.tab === "s-ai") renderStoreAiSettingsTab();
+    if (btn.dataset.tab === "s-products") renderProductsTab();
+    if (btn.dataset.tab === "s-announcements") { renderStoreAnnouncementsTab(); markStoreAnnouncementsSeen(); }
+  });
+});
+
+function renderStoreAnnouncementBanner() {
+  const host = $("#store-announcement-banner");
+  if (!state.announcements.length) { host.innerHTML = ""; return; }
+  const latest = state.announcements[0];
+  host.innerHTML = `
+    <div class="panel" style="border-right:4px solid var(--gold);background:var(--gold-tint);">
+      <b style="display:block;margin-bottom:4px;">📣 ${escapeHtml(latest.title)}</b>
+      <span style="font-size:13.5px;color:var(--ink-soft);">${escapeHtml(latest.message)}</span>
+    </div>`;
+}
+
+// ---------------------------------------------------------
+// تبويب "الاشتراك" (لوحة التاجر) — يظهر بطاقة ملوّنة حسب نوع الخطة الحالية
+// (مجاني / شهري / سنوي) مع تاريخ البدء والانتهاء والسعر، من صف المتجر نفسه
+// ---------------------------------------------------------
+function renderStoreSubscriptionBadge() {
+  const s = state.session.data;
+  ["free", "month", "year"].forEach(p => $(`#sub-badge-${p}`).classList.add("hidden"));
+
+  const plan = s.plan || "free";
+  const datesHtml = `تاريخ البدء: ${s.subscribed_at || "—"}<br>ينتهي في: ${s.expires_at || "—"}`;
+
+  if (plan === "free") {
+    $("#sub-badge-dates-free").innerHTML = datesHtml;
+    $("#sub-badge-free").classList.remove("hidden");
+  } else if (plan === "month") {
+    $("#sub-badge-price-month").textContent = `${Number(state.subscriptionSettings?.monthly_price || 0).toLocaleString("en-US")} د.ع`;
+    $("#sub-badge-dates-month").innerHTML = datesHtml;
+    $("#sub-badge-month").classList.remove("hidden");
+  } else if (plan === "year") {
+    $("#sub-badge-price-year").textContent = `${Number(state.subscriptionSettings?.yearly_price || 0).toLocaleString("en-US")} د.ع`;
+    $("#sub-badge-dates-year").innerHTML = datesHtml;
+    $("#sub-badge-year").classList.remove("hidden");
+  }
+}
+
+// ---------------------------------------------------------
+// تبويب الإعلانات (لوحة التاجر) + إشعار "إعلان جديد" (نقطة حمراء)
+// ---------------------------------------------------------
+function renderStoreAnnouncementsTab() {
+  const host = $("#store-announcements-list");
+  if (!host) return;
+  const lastSeen = localStorage.getItem(storeAnnouncementsSeenKey());
+  host.innerHTML = state.announcements.length ? state.announcements.map(a => {
+    const isNew = !lastSeen || new Date(a.created_at) > new Date(lastSeen);
+    const scope = a.store_id ? "خاص بمتجرك" : "إعلان عام لكل المتاجر";
+    return `
+    <div class="mini-product" style="align-items:flex-start;${isNew ? 'border-color:var(--bad);' : ''}">
+      <div class="info">
+        <b>
+          ${isNew ? '<span style="display:inline-block;width:8px;height:8px;border-radius:50%;background:var(--bad);margin-inline-end:6px;"></span>' : ''}
+          ${escapeHtml(a.title)}
+          <span style="font-weight:400;color:var(--ink-soft);">— ${scope}</span>
+        </b>
+        <span style="font-family:var(--font-display);color:var(--ink);">${escapeHtml(a.message)}</span><br>
+        <span>${fmtTime(a.created_at)}</span>
+      </div>
+    </div>`;
+  }).join("") : `<div class="empty-state"><p>لا توجد إعلانات حتى الآن</p></div>`;
+}
+
+function storeAnnouncementsSeenKey() {
+  return `wb_ann_seen_${state.session?.data?.id || "default"}`;
+}
+
+function refreshStoreAnnouncementsBadge() {
+  const navBtn = $(`.nav-item[data-tab="s-announcements"]`);
+  if (!navBtn) return;
+  const lastSeen = localStorage.getItem(storeAnnouncementsSeenKey());
+  const hasNew = state.announcements.some(a => !lastSeen || new Date(a.created_at) > new Date(lastSeen));
+  navBtn.classList.toggle("has-notif", hasNew);
+}
+
+function markStoreAnnouncementsSeen() {
+  localStorage.setItem(storeAnnouncementsSeenKey(), new Date().toISOString());
+  refreshStoreAnnouncementsBadge();
+}
+
+function renderStoreOverview() {
+  const pending = state.orders.filter(o => o.status === "pending").length;
+  const completed = state.orders.filter(o => o.status === "completed").length;
+  const cancelled = state.orders.filter(o => o.status === "cancelled").length;
+
+  $("#store-stats").innerHTML = `
+    <div class="stat-card"><div class="num">${state.orders.length}</div><div class="lbl">إجمالي الطلبات</div></div>
+    <div class="stat-card wait"><div class="num">${pending}</div><div class="lbl">بالانتظار</div></div>
+    <div class="stat-card ok"><div class="num">${completed}</div><div class="lbl">منجزة</div></div>
+    <div class="stat-card bad"><div class="num">${cancelled}</div><div class="lbl">ملغاة</div></div>
+  `;
+  renderOrdersTable();
+}
+
+$all("#orders-filter-tabs .tab-btn").forEach(b => b.addEventListener("click", () => {
+  $all("#orders-filter-tabs .tab-btn").forEach(x => x.classList.remove("active"));
+  b.classList.add("active");
+  state.ordersFilter = b.dataset.filter;
+  renderOrdersTable();
+}));
+
+function renderOrdersTable() {
+  const filtered = state.ordersFilter === "all" ? state.orders : state.orders.filter(o => o.status === state.ordersFilter);
+  $("#orders-empty").classList.toggle("hidden", filtered.length !== 0);
+  $("#orders-tbody").innerHTML = filtered.map(o => `
+    <tr>
+      <td>${escapeHtml(o.name || '—')}</td>
+      <td>${escapeHtml(o.location || '—')}</td>
+      <td style="font-family:var(--font-mono)">${escapeHtml(o.phone || '—')}</td>
+      <td>${escapeHtml(o.product_name || o.order_type || '—')}</td>
+      <td>${escapeHtml(o.order_variant || '—')}</td>
+      <td>${fmtPrice(o.unit_price, o.discount_percent)}</td>
+      <td>${o.quantity ?? 1}</td>
+      <td>${escapeHtml(o.notes || '—')}</td>
+      <td>${fmtOrderPlace(o)}</td>
+      <td>${fmtDate(o.created_at)}</td>
+      <td>${statusBadge(o.status)}</td>
+      <td class="row-actions">
+        ${o.status !== 'completed' ? `<button class="btn btn-ok btn-sm" data-complete="${o.id}">إنجاز</button>` : ''}
+        ${o.status !== 'cancelled' ? `<button class="btn btn-bad btn-sm" data-cancel="${o.id}">إلغاء</button>` : ''}
+        ${o.status !== 'pending' ? `<button class="btn btn-outline btn-sm" data-pending="${o.id}">إرجاع للانتظار</button>` : ''}
+      </td>
+    </tr>
+  `).join("");
+
+  $all("[data-complete]").forEach(b => b.addEventListener("click", () => updateOrderStatus(b.dataset.complete, "completed")));
+  $all("[data-cancel]").forEach(b => b.addEventListener("click", () => updateOrderStatus(b.dataset.cancel, "cancelled")));
+  $all("[data-pending]").forEach(b => b.addEventListener("click", () => updateOrderStatus(b.dataset.pending, "pending")));
+}
+
+async function updateOrderStatus(id, status) {
+  try {
+    await SB.update("orders", `id=eq.${id}`, { status });
+    const o = state.orders.find(x => x.id === id);
+    if (o) o.status = status;
+    renderStoreOverview();
+    toast(status === "completed" ? "تم تعليم الطلب كمنجز" : status === "cancelled" ? "تم إلغاء الطلب" : "تم إرجاع الطلب للانتظار", "ok");
+  } catch (err) {
+    console.error(err);
+    toast("تعذر تحديث حالة الطلب", "bad");
+  }
+}
+
+function renderStoreInfo() {
+  const s = state.session.data;
+  $("#store-info-view").innerHTML = `
+    <div class="field"><label>اسم المتجر</label><input value="${escapeHtml(s.store_name)}" disabled></div>
+    <div class="field"><label>الاسم الكامل</label><input value="${escapeHtml(s.full_name || '—')}" disabled></div>
+    <div class="field"><label>رقم الدخول</label><input value="${escapeHtml(s.phone)}" disabled style="font-family:var(--font-mono)"></div>
+    <div class="field"><label>رقم واتساب البوت</label><input value="${escapeHtml(s.ai_phone)}" disabled style="font-family:var(--font-mono)"></div>
+    <div class="field" style="grid-column:1/-1;"><label>ملاحظة</label><input value="لتعديل هذه البيانات تواصل مع المشرف العام" disabled></div>
+  `;
+}
+
+// ---------------------------------------------------------
+// تقديم بطلب حذف الحساب (لوحة التاجر)
+// ---------------------------------------------------------
+function resetDeleteAccountModal() {
+  $("#delete-account-step-warning").classList.remove("hidden");
+  $("#delete-account-step-reason").classList.add("hidden");
+  $("#delete-account-step-done").classList.add("hidden");
+  $("#delete-account-agree-terms").checked = false;
+  $("#delete-account-reason").value = "";
+}
+
+$("#btn-open-delete-account").addEventListener("click", () => {
+  resetDeleteAccountModal();
+  $("#modal-delete-account").classList.add("show");
+});
+
+$("#btn-delete-account-continue").addEventListener("click", () => {
+  if (!$("#delete-account-agree-terms").checked) {
+    toast("يجب الموافقة على الشروط أولًا للمتابعة", "bad");
+    return;
+  }
+  $("#delete-account-step-warning").classList.add("hidden");
+  $("#delete-account-step-reason").classList.remove("hidden");
+});
+
+$("#btn-delete-account-back").addEventListener("click", () => {
+  $("#delete-account-step-reason").classList.add("hidden");
+  $("#delete-account-step-warning").classList.remove("hidden");
+});
+
+$("#btn-delete-account-submit").addEventListener("click", async () => {
+  const reason = $("#delete-account-reason").value.trim();
+  if (!reason) { toast("الرجاء كتابة سبب حذف الحساب", "bad"); return; }
+
+  const btn = $("#btn-delete-account-submit");
+  btn.disabled = true;
+  btn.textContent = "جارٍ الإرسال...";
+  try {
+    await SB.insert("complaints", {
+      store_id: state.session.data.id,
+      store_name: state.session.data.store_name,
+      subject: reason,
+      message: "تقديم بطلب حذف الحساب",
+    });
+    $("#delete-account-step-reason").classList.add("hidden");
+    $("#delete-account-step-done").classList.remove("hidden");
+    await loadStoreData();
+    renderMyComplaints();
+  } catch (err) {
+    console.error(err);
+    toast("تعذر إرسال طلب حذف الحساب", "bad");
+  } finally {
+    btn.disabled = false;
+    btn.textContent = "تقديم الطلب";
+  }
+});
+
+// ---- شكوى المتجر ----
+$("#send-complaint").addEventListener("click", async () => {
+  const subject = $("#complaint-subject").value.trim();
+  const message = $("#complaint-message").value.trim();
+  if (!message) { toast("الرجاء كتابة تفاصيل الشكوى", "bad"); return; }
+  try {
+    await SB.insert("complaints", {
+      store_id: state.session.data.id,
+      store_name: state.session.data.store_name,
+      subject, message,
+    });
+    toast("تم إرسال الشكوى إلى المشرف", "ok");
+    $("#complaint-subject").value = ""; $("#complaint-message").value = "";
+    await loadStoreData();
+    renderMyComplaints();
+  } catch (err) { console.error(err); toast("تعذر إرسال الشكوى", "bad"); }
+});
+
+function renderMyComplaints() {
+  $("#my-complaints-list").innerHTML = state.complaints.length ? state.complaints.map(c => `
+    <div class="mini-product" style="align-items:flex-start;">
+      <div class="info">
+        <b>${escapeHtml(c.subject || 'بدون عنوان')}</b>
+        <span style="font-family:var(--font-display);color:var(--ink);">${escapeHtml(c.message)}</span><br>
+        <span>${fmtTime(c.created_at)}</span>
+      </div>
+      ${c.status === 'resolved' ? '<span class="badge ok">تم الحل</span>' : '<span class="badge wait">قيد المراجعة</span>'}
+    </div>
+  `).join("") : `<div class="empty-state"><p>لم تقدّم أي شكوى بعد</p></div>`;
+}
+
+// ---------------------------------------------------------
+// المنتجات (لوحة التاجر) — عرض، بحث، تصفية، إضافة/تعديل/حذف
+// ---------------------------------------------------------
+
+// عدد مرات طلب كل منتج (بالاعتماد على مطابقة اسم المنتج بجدول orders)
+function productOrderCount(productName) {
+  if (!productName) return 0;
+  return state.orders.filter(o => (o.product_name || o.order_type || "") === productName)
+    .reduce((sum, o) => sum + (o.quantity || 1), 0);
+}
+
+function renderProductsTab() {
+  // تحديث قائمة الفئات المتاحة (select + datalist)
+  const categories = [...new Set(state.products.map(p => p.category).filter(Boolean))].sort();
+  const catSelect = $("#product-category-filter");
+  const currentCatValue = state.productCategoryFilter;
+  catSelect.innerHTML = `<option value="">كل الفئات</option>` + categories.map(c => `<option value="${escapeHtml(c)}">${escapeHtml(c)}</option>`).join("");
+  catSelect.value = currentCatValue;
+  $("#p-category-list").innerHTML = categories.map(c => `<option value="${escapeHtml(c)}">`).join("");
+
+  // إحصائيات سريعة
+  const outOfStock = state.products.filter(p => (p.stock_quantity ?? 0) <= 0).length;
+  const lowStock = state.products.filter(p => (p.stock_quantity ?? 0) > 0 && (p.stock_quantity ?? 0) <= 5).length;
+  $("#products-stats").innerHTML = `
+    <div class="stat-card"><div class="num">${state.products.length}</div><div class="lbl">إجمالي المنتجات</div></div>
+    <div class="stat-card wait"><div class="num">${lowStock}</div><div class="lbl">قريبة النفاذ (≤5)</div></div>
+    <div class="stat-card bad"><div class="num">${outOfStock}</div><div class="lbl">منتهية الكمية</div></div>
+  `;
+
+  renderProductsGrid();
+}
+
+function renderProductsGrid() {
+  const q = ($("#product-search").value || "").trim().toLowerCase();
+  const cat = $("#product-category-filter").value;
+  let list = [...state.products];
+
+  if (cat) list = list.filter(p => p.category === cat);
+  if (q) {
+    list = list.filter(p =>
+      (p.name || "").toLowerCase().includes(q) ||
+      String(p.price || "").includes(q) ||
+      (p.variant_type || "").toLowerCase().includes(q)
+    );
+  }
+
+  if (state.productsFilter === "low_stock") {
+    list = list.filter(p => (p.stock_quantity ?? 0) > 0 && (p.stock_quantity ?? 0) <= 5);
+  } else if (state.productsFilter === "out_of_stock") {
+    list = list.filter(p => (p.stock_quantity ?? 0) <= 0);
+  } else if (state.productsFilter === "most_ordered") {
+    list = list.map(p => ({ ...p, _count: productOrderCount(p.name) })).sort((a, b) => b._count - a._count);
+  } else if (state.productsFilter === "least_ordered") {
+    list = list.map(p => ({ ...p, _count: productOrderCount(p.name) })).sort((a, b) => a._count - b._count);
+  }
+
+  $("#products-empty").classList.toggle("hidden", list.length !== 0);
+  $("#products-count-label").textContent = `${state.products.length} منتج`;
+
+  $("#products-grid").innerHTML = list.map(p => productCardHtml(p)).join("");
+
+  $all("#products-grid [data-edit-product]").forEach(b => b.addEventListener("click", () => openProductModal(b.dataset.editProduct)));
+  $all("#products-grid [data-delete-product]").forEach(b => b.addEventListener("click", () => deleteProduct(b.dataset.deleteProduct)));
+  $all("#products-grid [data-restock]").forEach(b => b.addEventListener("click", () => restockProduct(b.dataset.restock)));
+}
+
+function productCardHtml(p) {
+  const stock = p.stock_quantity ?? 0;
+  const stockBadge = stock <= 0
+    ? `<span class="badge bad">نفذت الكمية</span>`
+    : stock <= 5
+      ? `<span class="badge wait">قريبة النفاذ (${stock})</span>`
+      : `<span class="badge ok">متوفر (${stock})</span>`;
+  const priceLine = fmtPrice(p.price, p.discount_percent);
+  const orderCount = productOrderCount(p.name);
+
+  return `
+  <div class="store-card" data-id="${p.id}">
+    <div class="top">
+      <div>
+        <h4>${escapeHtml(p.name)}</h4>
+        <div class="meta">${escapeHtml(p.category || "بدون فئة")}${p.variant_type ? " — " + escapeHtml(p.variant_type) : ""}</div>
       </div>
     </div>
-
-    <!-- الخطوة 2: كتابة سبب الحذف -->
-    <div id="delete-account-step-reason" class="hidden">
-      <p style="color:var(--ink-soft);font-size:13.5px;margin:-6px 0 14px;">
-        الرجاء كتابة سبب رغبتك في حذف الحساب، ليتم إرسال طلبك إلى فريق الإدارة:
-      </p>
-      <div class="field">
-        <label>سبب حذف الحساب</label>
-        <textarea id="delete-account-reason" rows="4" placeholder="اكتب السبب هنا..."></textarea>
-      </div>
-      <div class="modal-foot">
-        <button class="btn btn-outline btn-sm" id="btn-delete-account-back">رجوع</button>
-        <button class="btn btn-bad btn-sm" id="btn-delete-account-submit">تقديم الطلب</button>
-      </div>
+    <div class="stat-line">
+      <span>السعر: <b>${priceLine}</b></span>
+      <span>الطلبات: <b>${orderCount}</b></span>
     </div>
-
-    <!-- الخطوة 3: تم الإرسال -->
-    <div id="delete-account-step-done" class="hidden">
-      <div class="empty-state" style="padding:20px 10px;">
-        <div class="glyph" style="color:var(--bad);">✔</div>
-        <p style="margin-bottom:4px;font-weight:700;">تم إرسال طلبك بنجاح</p>
-        <p style="color:var(--ink-soft);font-size:13.5px;">سيتم التواصل معك بعد مراجعة الطلب من قِبل الإدارة، خلال يومين إلى ثلاثة أيام.</p>
-      </div>
-      <div class="modal-foot">
-        <button class="btn btn-primary btn-sm" data-close="modal-delete-account">إغلاق</button>
-      </div>
+    <div>${stockBadge}</div>
+    <div class="actions">
+      <button class="btn btn-outline btn-sm" data-edit-product="${p.id}">تعديل</button>
+      <button class="btn btn-outline btn-sm" data-restock="${p.id}">إعادة شحن</button>
+      <button class="btn btn-bad btn-sm" data-delete-product="${p.id}">حذف</button>
     </div>
-  </div>
-</div>
+  </div>`;
+}
 
-<!-- منطقة الطباعة (مخفية، تظهر فقط عند الطباعة) -->
-<div class="print-area" id="print-area"></div>
+$("#product-search").addEventListener("input", renderProductsGrid);
+$("#product-category-filter").addEventListener("change", () => {
+  state.productCategoryFilter = $("#product-category-filter").value;
+  renderProductsGrid();
+});
+$all("#products-filter-tabs .tab-btn").forEach(b => b.addEventListener("click", () => {
+  $all("#products-filter-tabs .tab-btn").forEach(x => x.classList.remove("active"));
+  b.classList.add("active");
+  state.productsFilter = b.dataset.pfilter;
+  renderProductsGrid();
+}));
 
-<div class="toast-host" id="toast-host"></div>
+$("#btn-add-product").addEventListener("click", () => openProductModal(null));
 
-<script src="js/config.js"></script>
-<script src="js/supabase-client.js"></script>
-<script src="js/app.js"></script>
-</body>
-</html>
+function openProductModal(productId) {
+  state.editingProductId = productId;
+  const p = productId ? state.products.find(x => x.id === productId) : null;
+
+  $("#product-modal-title").textContent = p ? "تعديل المنتج" : "إضافة منتج جديد";
+  $("#p-name").value = p?.name || "";
+  $("#p-category").value = p?.category || "";
+  $("#p-variant-type").value = p?.variant_type || "";
+  $("#p-price").value = p?.price ?? "";
+  $("#p-discount").value = p?.discount_percent ?? "";
+  $("#p-stock").value = p?.stock_quantity ?? 0;
+  $("#p-video").value = p?.video_url || "";
+  $("#p-description").value = p?.description || "";
+
+  $("#modal-product").classList.add("show");
+}
+
+$("#save-product-btn").addEventListener("click", async () => {
+  const name = $("#p-name").value.trim();
+  if (!name) { toast("الرجاء إدخال اسم المنتج", "bad"); return; }
+
+  const payload = {
+    name,
+    category: $("#p-category").value.trim() || null,
+    variant_type: $("#p-variant-type").value.trim() || null,
+    price: $("#p-price").value ? Number($("#p-price").value) : null,
+    discount_percent: $("#p-discount").value ? Number($("#p-discount").value) : null,
+    stock_quantity: $("#p-stock").value ? Number($("#p-stock").value) : 0,
+    video_url: $("#p-video").value.trim() || null,
+    description: $("#p-description").value.trim() || null,
+  };
+
+  const btn = $("#save-product-btn");
+  btn.disabled = true; btn.textContent = "جارٍ الحفظ...";
+
+  try {
+    if (state.editingProductId) {
+      await SB.update("products", `id=eq.${state.editingProductId}`, payload);
+    } else {
+      await SB.insert("products", { ...payload, store_id: state.session.data.id });
+    }
+    toast("تم حفظ المنتج بنجاح", "ok");
+    $("#modal-product").classList.remove("show");
+    await loadStoreData();
+    renderProductsTab();
+  } catch (err) {
+    console.error(err);
+    toast("تعذر حفظ المنتج", "bad");
+  } finally {
+    btn.disabled = false; btn.textContent = "حفظ المنتج";
+  }
+});
+
+async function deleteProduct(id) {
+  if (!confirm("هل أنت متأكد من حذف هذا المنتج؟")) return;
+  try {
+    await SB.remove("products", `id=eq.${id}`);
+    toast("تم حذف المنتج", "ok");
+    await loadStoreData();
+    renderProductsTab();
+  } catch (err) {
+    console.error(err);
+    toast("تعذر حذف المنتج", "bad");
+  }
+}
+
+async function restockProduct(id) {
+  const p = state.products.find(x => x.id === id);
+  if (!p) return;
+  const addStr = prompt("كم قطعة تريد إضافتها للمخزون؟", "10");
+  if (!addStr) return;
+  const add = Number(addStr);
+  if (!Number.isFinite(add) || add <= 0) { toast("رقم غير صالح", "bad"); return; }
+  try {
+    const newStock = (p.stock_quantity || 0) + add;
+    await SB.update("products", `id=eq.${id}`, { stock_quantity: newStock });
+    toast("تم تحديث المخزون", "ok");
+    await loadStoreData();
+    renderProductsTab();
+  } catch (err) {
+    console.error(err);
+    toast("تعذر تحديث المخزون", "bad");
+  }
+}
+
+// ---------------------------------------------------------
+// ربط واتساب (لوحة المتجر)
+// ---------------------------------------------------------
+
+function showWaState(state) {
+  // state: 'disconnected' | 'loading' | 'qr' | 'connected'
+  $("#wa-state-disconnected").classList.toggle("hidden", state !== "disconnected");
+  $("#wa-state-loading").classList.toggle("hidden", state !== "loading");
+  $("#wa-state-qr").classList.toggle("hidden", state !== "qr");
+  $("#wa-state-connected").classList.toggle("hidden", state !== "connected");
+}
+
+function setChannelCardStatus(channel, status, label) {
+  const row = $(`#${channel}-status-row`);
+  const labelEl = $(`#${channel}-status-label`);
+  if (!row || !labelEl) return;
+  row.classList.remove("connected", "pending", "disconnected");
+  row.classList.add(status === "connected" ? "connected" : status === "pending" || status === "loading" || status === "qr" ? "pending" : "disconnected");
+  labelEl.textContent = label;
+}
+
+// ---------------------------------------------------------
+// تطبيق تحكم الأدمن بالقنوات (إظهار/إخفاء وتفعيل/إغلاق) على لوحة التاجر
+// ---------------------------------------------------------
+async function refreshChannelAvailability() {
+  const storeId = state.session.data.id;
+  try {
+    const [globalRows, overrideRows] = await Promise.all([
+      SB.select("channel_global_settings", "select=*"),
+      SB.select("channel_store_overrides", `store_id=eq.${storeId}&select=*`),
+    ]);
+    const globalByChannel = Object.fromEntries(globalRows.map(r => [r.channel, r]));
+    const overrideByChannel = Object.fromEntries(overrideRows.map(r => [r.channel, r]));
+
+    const effective = {};
+    ALL_CHANNELS.forEach(channel => {
+      const g = globalByChannel[channel] || { visibility: "visible", status: "enabled" };
+      const o = overrideByChannel[channel] || {};
+      effective[channel] = {
+        visibility: o.visibility || g.visibility || "visible",
+        status: o.status || g.status || "enabled",
+      };
+    });
+    state.channelEffective = effective;
+    applyChannelAvailability();
+  } catch (err) {
+    console.error(err);
+    // تعذر جلب إعدادات القنوات: نترك كل القنوات كما هي (ظاهرة ومفتوحة) بدل تعطيل اللوحة بالكامل
+  }
+}
+
+function isChannelClosed(channel) {
+  return state.channelEffective[channel]?.status === "disabled";
+}
+
+function applyChannelAvailability() {
+  ALL_CHANNELS.forEach(channel => {
+    const card = $(`#channel-card-${channel}`);
+    if (!card) return;
+    const info = state.channelEffective[channel] || { visibility: "visible", status: "enabled" };
+    const hidden = info.visibility === "hidden";
+    const closed = info.status === "disabled";
+    card.classList.toggle("hidden", hidden);
+    card.classList.toggle("channel-closed", !hidden && closed);
+  });
+}
+
+async function refreshWaStatus() {
+  const storeId = state.session.data.id;
+  try {
+    const res = await LinkAPI.status(storeId);
+    applyWaStatus(res);
+  } catch (err) {
+    console.error(err);
+    // تعذر الوصول لسيرفر الربط: نعرض حالة غير مربوط بدل تعليق الواجهة
+    showWaState("disconnected");
+    setChannelCardStatus("wa", "disconnected", "غير متصل");
+  }
+}
+
+function applyWaStatus(res) {
+  if (res.status === "connected") {
+    const numberText = res.number ? `الرقم المرتبط: ${res.number}` : "";
+    $("#wa-connected-number-modal").textContent = numberText;
+    $("#wa-connected-number").textContent = res.number || "";
+    $("#wa-connected-number").classList.toggle("hidden", !res.number);
+    showWaState("connected");
+    setChannelCardStatus("wa", "connected", "متصل");
+    stopWaPolling();
+  } else if (res.status === "qr" && res.qr) {
+    $("#wa-qr-img").src = res.qr;
+    showWaState("qr");
+    setChannelCardStatus("wa", "pending", "بانتظار مسح الرمز");
+    startWaPolling();
+  } else if (res.status === "connecting" || res.status === "pending") {
+    showWaState("loading");
+    setChannelCardStatus("wa", "pending", "جارٍ التحضير...");
+    startWaPolling();
+  } else {
+    showWaState("disconnected");
+    setChannelCardStatus("wa", "disconnected", "غير متصل");
+    stopWaPolling();
+  }
+}
+
+function startWaPolling() {
+  if (state.waPollTimer) return;
+  state.waPollTimer = setInterval(refreshWaStatus, 4000);
+}
+function stopWaPolling() {
+  if (state.waPollTimer) { clearInterval(state.waPollTimer); state.waPollTimer = null; }
+}
+
+$("#btn-wa-open-modal").addEventListener("click", () => {
+  $("#modal-wa").classList.add("show");
+  refreshWaStatus();
+});
+
+$("#btn-wa-connect").addEventListener("click", async () => {
+  if (isChannelClosed("wa")) { toast("عذرًا، هذه القناة مغلقة في الوقت الحالي", "bad"); return; }
+  showWaState("loading");
+  setChannelCardStatus("wa", "pending", "جارٍ التحضير...");
+  const storeId = state.session.data.id;
+  try {
+    const res = await LinkAPI.connect(storeId);
+    applyWaStatus(res);
+  } catch (err) {
+    console.error(err);
+    toast("تعذر الاتصال بسيرفر الربط. تحقق من إعدادات LINK_SERVER بملف config.js", "bad");
+    showWaState("disconnected");
+    setChannelCardStatus("wa", "disconnected", "غير متصل");
+  }
+});
+
+$("#btn-wa-refresh-qr").addEventListener("click", async () => {
+  showWaState("loading");
+  const storeId = state.session.data.id;
+  try {
+    const res = await LinkAPI.connect(storeId);
+    applyWaStatus(res);
+  } catch (err) {
+    console.error(err);
+    toast("تعذر تحديث رمز الربط", "bad");
+  }
+});
+
+$("#btn-wa-disconnect").addEventListener("click", async () => {
+  if (!confirm("هل تريد فصل ربط الواتساب؟ ستحتاج لمسح رمز جديد لإعادة الربط.")) return;
+  const storeId = state.session.data.id;
+  try {
+    await LinkAPI.disconnect(storeId);
+    toast("تم فصل الربط", "ok");
+    showWaState("disconnected");
+    setChannelCardStatus("wa", "disconnected", "غير متصل");
+  } catch (err) {
+    console.error(err);
+    toast("تعذر فصل الربط", "bad");
+  }
+});
+
+// ---------------------------------------------------------
+// ربط ماسنجر / انستغرام عبر Meta OAuth (لوحة المتجر)
+// ---------------------------------------------------------
+
+const METACHANNEL_LABELS = { wa: "واتساب", messenger: "ماسنجر", instagram: "انستغرام", telegram: "تيليجرام", tiktok: "تيك توك" };
+const ALL_CHANNELS = ["wa", "messenger", "instagram", "telegram", "tiktok"];
+
+async function refreshMetaStatus() {
+  const storeId = state.session.data.id;
+  try {
+    const res = await MetaAPI.status(storeId);
+    const byChannel = {};
+    (res.channels || []).forEach(c => { byChannel[c.channel] = c; });
+
+    ["messenger", "instagram", "telegram", "tiktok"].forEach(channel => {
+      const info = byChannel[channel];
+      const connected = info && info.status === "connected";
+
+      setChannelCardStatus(channel, connected ? "connected" : "disconnected", connected ? "متصل" : "غير متصل");
+
+      $(`#btn-${channel}-connect`).classList.toggle("hidden", connected);
+      $(`#btn-${channel}-disconnect`).classList.toggle("hidden", !connected);
+      $(`#${channel}-ai-row`).classList.toggle("hidden", !connected);
+
+      const nameEl = $(`#${channel}-external-name`);
+      if (connected && info.external_name) {
+        nameEl.textContent = info.external_name;
+        nameEl.classList.remove("hidden");
+      } else {
+        nameEl.classList.add("hidden");
+      }
+
+      if (connected) {
+        $(`#${channel}-ai-toggle`).checked = !!info.ai_enabled;
+      }
+    });
+  } catch (err) {
+    console.error(err);
+    // تعذر الوصول لسيرفر الربط: نعرض حالة غير متصل بدل تعليق الواجهة
+    ["messenger", "instagram", "telegram", "tiktok"].forEach(channel => setChannelCardStatus(channel, "disconnected", "غير متصل"));
+  }
+}
+
+function startMetaOAuth(channel) {
+  if (isChannelClosed(channel)) { toast("عذرًا، هذه القناة مغلقة في الوقت الحالي", "bad"); return; }
+  const storeId = state.session.data.id;
+  setChannelCardStatus(channel, "pending", "جارٍ فتح نافذة الربط...");
+
+  const getUrl =
+    channel === "instagram" ? MetaAPI.getInstagramOAuthUrl(storeId) :
+    channel === "tiktok" ? MetaAPI.getTikTokOAuthUrl(storeId) :
+    MetaAPI.getOAuthUrl(storeId);
+
+  getUrl.then(({ url }) => {
+    const popup = window.open(url, "meta_oauth", "width=600,height=720");
+    if (!popup) {
+      toast("يرجى السماح للنوافذ المنبثقة (Popups) بهذا الموقع للمتابعة", "bad");
+      setChannelCardStatus(channel, "disconnected", "غير متصل");
+      return;
+    }
+
+    const timer = setInterval(() => {
+      if (popup.closed) clearInterval(timer);
+    }, 1000);
+
+    function handler(event) {
+      if (!event.data || typeof event.data !== "object") return;
+      if (event.data.type === "meta_oauth_success" || event.data.type === "tiktok_oauth_success") {
+        window.removeEventListener("message", handler);
+        clearInterval(timer);
+        toast("تم ربط الحساب بنجاح", "ok");
+        refreshMetaStatus();
+      } else if (event.data.type === "meta_oauth_pages") {
+        // التاجر يملك أكثر من صفحة فيسبوك: نعرض قائمة ليختار بدل ربط صفحة عشوائية
+        window.removeEventListener("message", handler);
+        clearInterval(timer);
+        setChannelCardStatus("messenger", "pending", "اختر الصفحة التي تريد ربطها...");
+        showPageSelectionModal(event.data.selectionId, event.data.pages || []);
+      } else if (event.data.type === "meta_oauth_error" || event.data.type === "tiktok_oauth_error") {
+        window.removeEventListener("message", handler);
+        clearInterval(timer);
+        toast(event.data.message || "تعذر إتمام الربط", "bad");
+        setChannelCardStatus(channel, "disconnected", "غير متصل");
+      }
+    }
+    window.addEventListener("message", handler);
+  }).catch(err => {
+    console.error(err);
+    toast("تعذر بدء عملية الربط. تحقق من إعدادات السيرفر", "bad");
+    setChannelCardStatus(channel, "disconnected", "غير متصل");
+  });
+}
+
+// ربط بوت تيليجرام: لا يوجد OAuth هنا، فقط نفتح مودال لصق التوكن
+function startTelegramConnect() {
+  if (isChannelClosed("telegram")) { toast("عذرًا، هذه القناة مغلقة في الوقت الحالي", "bad"); return; }
+  $("#f-telegram-bot-token").value = "";
+  $("#modal-telegram-connect").classList.add("show");
+}
+
+$("#btn-telegram-connect-submit").addEventListener("click", async () => {
+  const botToken = $("#f-telegram-bot-token").value.trim();
+  if (!botToken) {
+    toast("الصق توكن البوت أولًا", "bad");
+    return;
+  }
+  const btn = $("#btn-telegram-connect-submit");
+  btn.disabled = true;
+  setChannelCardStatus("telegram", "pending", "جارٍ التحقق من التوكن...");
+  try {
+    const storeId = state.session.data.id;
+    await MetaAPI.connectTelegram(storeId, botToken);
+    $("#modal-telegram-connect").classList.remove("show");
+    toast("تم ربط بوت تيليجرام بنجاح", "ok");
+    refreshMetaStatus();
+  } catch (err) {
+    console.error(err);
+    toast("تعذر ربط البوت — تأكد أن التوكن صحيح ومنسوخ بالكامل", "bad");
+    setChannelCardStatus("telegram", "disconnected", "غير متصل");
+  } finally {
+    btn.disabled = false;
+  }
+});
+
+
+
+// قائمة اختيار صفحة فيسبوك (خاصة بماسنجر فقط — لا وجود لهذا المفهوم بتدفق
+// انستغرام المباشر) تظهر فقط عندما يملك حساب التاجر أكثر من صفحة
+function showPageSelectionModal(selectionId, pages) {
+  const list = $("#page-select-list");
+  list.innerHTML = pages.length
+    ? ""
+    : `<p style="color:var(--ink-soft);font-size:13px;">لم يتم العثور على أي صفحة.</p>`;
+
+  pages.forEach(p => {
+    const btn = document.createElement("button");
+    btn.type = "button";
+    btn.className = "page-pick-row";
+    btn.innerHTML = `
+      ${p.picture
+        ? `<img src="${escapeHtml(p.picture)}" alt="">`
+        : `<span class="ph-avatar">${escapeHtml((p.name || "؟").trim().charAt(0) || "؟")}</span>`}
+      <span class="info">
+        <b>${escapeHtml(p.name || "بدون اسم")}</b>
+        ${p.category ? `<span>${escapeHtml(p.category)}</span>` : ""}
+      </span>
+    `;
+    btn.addEventListener("click", async () => {
+      $all("button", list).forEach(b => b.disabled = true);
+      try {
+        const storeId = state.session.data.id;
+        await MetaAPI.selectPage(storeId, selectionId, p.id);
+        $("#modal-page-select").classList.remove("show");
+        toast("تم ربط الحساب بنجاح", "ok");
+        refreshMetaStatus();
+      } catch (err) {
+        console.error(err);
+        toast("تعذر ربط الصفحة المختارة، حاول مجددًا", "bad");
+        setChannelCardStatus("messenger", "disconnected", "غير متصل");
+        $all("button", list).forEach(b => b.disabled = false);
+      }
+    });
+    list.appendChild(btn);
+  });
+
+  $("#modal-page-select").classList.add("show");
+}
+
+$("#btn-page-select-close").addEventListener("click", () => {
+  $("#modal-page-select").classList.remove("show");
+  setChannelCardStatus("messenger", "disconnected", "غير متصل");
+});
+
+$("#btn-messenger-connect").addEventListener("click", () => startMetaOAuth("messenger"));
+$("#btn-instagram-connect").addEventListener("click", () => startMetaOAuth("instagram"));
+$("#btn-telegram-connect").addEventListener("click", () => startTelegramConnect());
+$("#btn-tiktok-connect").addEventListener("click", () => startMetaOAuth("tiktok"));
+
+["messenger", "instagram", "telegram", "tiktok"].forEach(channel => {
+  $(`#btn-${channel}-disconnect`).addEventListener("click", async () => {
+    if (!confirm(`هل تريد فصل ربط ${METACHANNEL_LABELS[channel]}؟`)) return;
+    const storeId = state.session.data.id;
+    try {
+      await MetaAPI.disconnect(storeId, channel);
+      toast("تم فصل الربط", "ok");
+      refreshMetaStatus();
+    } catch (err) {
+      console.error(err);
+      toast("تعذر فصل الربط", "bad");
+    }
+  });
+
+  $(`#${channel}-ai-toggle`).addEventListener("change", async (e) => {
+    const storeId = state.session.data.id;
+    const enabled = e.target.checked;
+    try {
+      await MetaAPI.setAiEnabled(storeId, channel, enabled);
+      toast(enabled ? "تم تفعيل الذكاء الاصطناعي" : "تم إيقاف الذكاء الاصطناعي", "ok");
+    } catch (err) {
+      console.error(err);
+      e.target.checked = !enabled; // تراجع عن التغيير بالواجهة إذا فشل الحفظ
+      toast("تعذر حفظ التغيير", "bad");
+    }
+  });
+});
+
+// ---------------------------------------------------------
+// إعدادات الذكاء الاصطناعي الخاصة بالمتجر (System Prompt + نموذج + مفتاح)
+// ---------------------------------------------------------
+
+function renderStoreAiSettingsTab() {
+  const s = state.session.data;
+  $("#store-ai-display-name").value = s.ai_display_name || "";
+  $("#store-ai-contact-info").value = s.ai_contact_info || "";
+}
+
+$("#save-store-ai-settings").addEventListener("click", async () => {
+  const storeId = state.session.data.id;
+  const patch = {
+    ai_display_name: $("#store-ai-display-name").value.trim(),
+    ai_contact_info: $("#store-ai-contact-info").value.trim(),
+  };
+  try {
+    const rows = await SB.update("stores", `id=eq.${storeId}`, patch);
+    state.session.data = { ...state.session.data, ...patch };
+    localStorage.setItem("wb_session", JSON.stringify(state.session));
+    toast("تم حفظ إعدادات الذكاء الاصطناعي", "ok");
+  } catch (err) {
+    console.error(err);
+    toast("تعذر حفظ الإعدادات", "bad");
+  }
+});
+
+// ---------------------------------------------------------
+// شارات حالة ربط واتساب بلوحة الأدمن (قراءة فقط، بدون تحكم)
+// ---------------------------------------------------------
+async function refreshAdminWaBadges() {
+  // نعتمد على عمود whatsapp_connected المخزّن بجدول stores (يحدّثه سيرفر الربط تلقائيًا)
+  // لذا يكفي إعادة تحميل بيانات المتاجر من Supabase مباشرة بدون الحاجة لسيرفر الربط
+  try {
+    const stores = await SB.select("stores", "select=*&order=created_at.desc");
+    state.stores = stores;
+    renderStoresGrid();
+    renderAdminOverview();
+  } catch (err) {
+    console.error(err);
+  }
+  // فحص دوري لأي شكوى جديدة لإظهار النقطة الحمراء دون الحاجة لتحديث الصفحة
+  try {
+    const complaints = await SB.select("complaints", "select=*&order=created_at.desc");
+    state.complaints = complaints;
+    if (!$("#tab-a-complaints").classList.contains("hidden")) renderComplaintsTab();
+    refreshAdminComplaintsBadge();
+  } catch (err) {
+    console.error(err);
+  }
+}
+
+// ---------------------------------------------------------
+// الطباعة
+// ---------------------------------------------------------
+$("#btn-print").addEventListener("click", () => {
+  const status = $("#print-status").value;
+  const mode = $("#print-mode").value;
+  const fromDateStr = $("#print-from-date").value; // اختياري: YYYY-MM-DD
+
+  let rows = status === "all" ? state.orders : state.orders.filter(o => o.status === status);
+
+  if (fromDateStr) {
+    const fromDate = new Date(fromDateStr);
+    fromDate.setHours(0, 0, 0, 0);
+    rows = rows.filter(o => o.created_at && new Date(o.created_at) >= fromDate);
+  }
+
+  if (!rows.length) { toast("لا توجد بيانات مطابقة للطباعة", "bad"); return; }
+
+  const statusLabel = { all: "كل الطلبات", pending: "الطلبات بالانتظار", completed: "الطلبات المنجزة", cancelled: "الطلبات الملغاة" }[status];
+  const dateRangeLabel = fromDateStr ? ` — من تاريخ ${fromDateStr}` : "";
+  const area = $("#print-area");
+
+  // ترتيب زمني تصاعدي (الأقدم أولاً) حتى يكون رقم الترتيب منطقيًا، ثم رقم تسلسلي يبدأ من 1
+  const ordered = [...rows].sort((a, b) => new Date(a.created_at) - new Date(b.created_at));
+
+  const orderLabel = o => escapeHtml([o.product_name || o.order_type, o.order_variant].filter(Boolean).join(" / ") || "—");
+  const priceQtyLabel = o => `${fmtPrice(o.unit_price, o.discount_percent)} / ${o.quantity ?? 1}`;
+
+  if (mode === "table") {
+    area.innerHTML = `
+      <h2>${escapeHtml(state.session.data.store_name)} — ${statusLabel}${dateRangeLabel}</h2>
+      <p>تاريخ الطباعة: ${new Date().toLocaleString("ar-IQ")}</p>
+      <table class="print-table">
+        <thead><tr><th>#</th><th>الاسم</th><th>الرقم</th><th>الطلب / نوع الطلب</th><th>السعر / الكمية</th><th>التوقيت</th></tr></thead>
+        <tbody>
+          ${ordered.map((o, i) => `<tr><td>${i + 1}</td><td>${escapeHtml(o.name || '')}</td><td>${escapeHtml(o.phone || '')}</td><td>${orderLabel(o)}</td><td>${priceQtyLabel(o)}</td><td>${fmtDate(o.created_at)}</td></tr>`).join("")}
+        </tbody>
+      </table>`;
+  } else {
+    area.innerHTML = `
+      <h2>${escapeHtml(state.session.data.store_name)} — بطاقات ${statusLabel}${dateRangeLabel}</h2>
+      <div class="print-labels">
+        ${ordered.map((o, i) => `
+          <div class="print-label">
+            <h4>#${i + 1} — ${escapeHtml(state.session.data.store_name)}</h4>
+            <p><b>الزبون:</b> ${escapeHtml(o.name || '—')}</p>
+            <p><b>الرقم:</b> ${escapeHtml(o.phone || '—')}</p>
+            <p><b>الطلب:</b> ${orderLabel(o)}</p>
+            <p><b>السعر / الكمية:</b> ${priceQtyLabel(o)}</p>
+            <p><b>التوقيت:</b> ${fmtDate(o.created_at)}</p>
+          </div>
+        `).join("")}
+      </div>`;
+  }
+
+  window.print();
+});
