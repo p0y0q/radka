@@ -110,9 +110,9 @@
 
     <div id="active-section" class="hidden-block active-block">
       <div class="glyph-wait">⏳</div>
-      <h2 style="margin:0 0 8px;font-size:17px;text-align:center;">عملية الاشتراك سارية حاليًا</h2>
+      <h2 style="margin:0 0 8px;font-size:17px;text-align:center;">أنت الآن مشترك في خطة</h2>
       <p style="margin:0 0 18px;color:var(--ink-soft);font-size:13.5px;text-align:center;">
-        اشتراكك الحالي (<b id="active-plan-label"></b>) ساري حتى تاريخ <b id="active-expiry"></b>. انتظر حتى ينتهي لتجديده من جديد.
+        خطتك الحالية (<b id="active-plan-label"></b>) تنتهي بتاريخ <b id="active-expiry"></b>. انتظر حتى تنتهي لتجديدها من جديد.
       </p>
       <a href="index.html" class="btn btn-outline" style="display:block;">العودة لتسجيل الدخول</a>
     </div>
@@ -282,10 +282,11 @@ $("#auth-form").addEventListener("submit", async (e) => {
     currentStore = store;
 
     const today = new Date().toISOString().slice(0, 10);
-    const hasActivePaidPlan = store.is_active && store.plan !== "free" && store.expires_at && store.expires_at >= today;
+    const hasActivePlan = store.is_active && store.expires_at && store.expires_at >= today;
 
-    if (hasActivePaidPlan) {
-      $("#active-plan-label").textContent = store.plan === "year" ? "سنوي" : "شهري";
+    if (hasActivePlan) {
+      const planLabel = store.plan === "year" ? "سنوي" : store.plan === "month" ? "شهري" : "مجاني";
+      $("#active-plan-label").textContent = planLabel;
       $("#active-expiry").textContent = store.expires_at;
       $("#auth-form").classList.add("hidden-block");
       $("#active-section").classList.remove("hidden-block");
