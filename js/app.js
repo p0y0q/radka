@@ -27,6 +27,7 @@ const state = {
   subscribeRequests: [],     // صفوف جدول subscribe (طلبات/معاملات الاشتراك المدفوع - تبويب الاشتراكات بلوحة الأدمن)
   subscriptionSettings: { monthly_price: 15000, yearly_price: 170000 },
   discountCodes: [],
+  paymentMethods: { card_enabled: false, direct_transfer_enabled: true, zaincash_enabled: true, superkey_enabled: true },
   waAdminSenderPollTimer: null, // مؤقت فحص حالة ربط رقم إرسال الأدمن (رسائل واتساب)
   waAdminBulkPollTimer: null,   // مؤقت متابعة تقدّم الإرسال الجماعي
   otpAdminSenderPollTimer: null, // مؤقت فحص حالة ربط رقم إرسال رموز التحقق (OTP)
@@ -256,7 +257,7 @@ async function enterAdmin() {
 
 async function loadAdminData() {
   try {
-    const [stores, orders, complaints, announcements, apiRows, aiPool, channelSettings, channelOverrides, subscribeRows, subSettingsRows, discountCodes] = await Promise.all([
+    const [stores, orders, complaints, announcements, apiRows, aiPool, channelSettings, channelOverrides, subscribeRows, subSettingsRows, discountCodes, payMethodsRows] = await Promise.all([
       SB.select("stores", "select=*&order=created_at.desc"),
       SB.select("orders", "select=*&order=created_at.desc&limit=2000"),
       SB.select("complaints", "select=*&order=created_at.desc"),
@@ -268,6 +269,7 @@ async function loadAdminData() {
       SB.select("subscribe", "select=*&order=created_at.desc"),
       SB.select("subscription_settings", "id=eq.1&select=*"),
       SB.select("discount_codes", "select=*&order=created_at.desc"),
+      SB.select("payment_methods_settings", "id=eq.1&select=*"),
     ]);
     state.stores = stores;
     state.orders = orders;
@@ -281,6 +283,10 @@ async function loadAdminData() {
     state.subscribeRequests = subscribeRows;
     state.subscriptionSettings = (subSettingsRows && subSettingsRows[0]) || { monthly_price: 15000, yearly_price: 170000 };
     state.discountCodes = discountCodes;
+    state.paymentMethods = (payMethodsRows && payMethodsRows[0]) || {
+      card_enabled: false, direct_transfer_enabled: true, zaincash_enabled: true, superkey_enabled: true,
+      zaincash_qr_url: null, zaincash_wallet_number: "", superkey_qr_url: null, superkey_wallet_number: "",
+    };
   } catch (err) {
     console.error(err);
     toast("خطأ في تحميل بيانات لوحة المشرف", "bad");
@@ -731,10 +737,65 @@ state.subscribeFilter = "pending";
 function renderSubscriptionsTab() {
   $("#f-monthly-price").value = state.subscriptionSettings.monthly_price;
   $("#f-yearly-price").value = state.subscriptionSettings.yearly_price;
+  renderPaymentMethodsSettings();
   renderDiscountCodesList();
   renderSubscribeRequestsList();
   refreshAdminSubscriptionsBadge();
 }
+
+// ---- طرق الدفع ----
+function renderPaymentMethodsSettings() {
+  const pm = state.paymentMethods;
+  $("#pm-card-enabled").checked = !!pm.card_enabled;
+  $("#pm-transfer-enabled").checked = !!pm.direct_transfer_enabled;
+  $("#pm-zaincash-enabled").checked = !!pm.zaincash_enabled;
+  $("#pm-superkey-enabled").checked = !!pm.superkey_enabled;
+  $("#pm-zaincash-number").value = pm.zaincash_wallet_number || "";
+  $("#pm-superkey-number").value = pm.superkey_wallet_number || "";
+  $("#pm-zaincash-qr-preview").src = pm.zaincash_qr_url || "";
+  $("#pm-zaincash-qr-preview").classList.toggle("hidden", !pm.zaincash_qr_url);
+  $("#pm-superkey-qr-preview").src = pm.superkey_qr_url || "";
+  $("#pm-superkey-qr-preview").classList.toggle("hidden", !pm.superkey_qr_url);
+}
+
+$("#btn-save-payment-methods").addEventListener("click", async () => {
+  const btn = $("#btn-save-payment-methods");
+  btn.disabled = true;
+  btn.textContent = "جارٍ الحفظ...";
+
+  try {
+    const patch = {
+      card_enabled: $("#pm-card-enabled").checked,
+      direct_transfer_enabled: $("#pm-transfer-enabled").checked,
+      zaincash_enabled: $("#pm-zaincash-enabled").checked,
+      superkey_enabled: $("#pm-superkey-enabled").checked,
+      zaincash_wallet_number: $("#pm-zaincash-number").value.trim(),
+      superkey_wallet_number: $("#pm-superkey-number").value.trim(),
+      updated_at: new Date().toISOString(),
+    };
+
+    // رفع صور QR الجديدة (إن اختار الأدمن ملفًا) لـ Supabase Storage —
+    // مسار ثابت بدون امتداد لكل مزوّد، upsert=true يستبدل الصورة القديمة تلقائيًا
+    const zcFile = $("#pm-zaincash-qr-file").files[0];
+    if (zcFile) patch.zaincash_qr_url = await SB.uploadFile("payment-uploads", "qr/zaincash-qr", zcFile, true);
+
+    const skFile = $("#pm-superkey-qr-file").files[0];
+    if (skFile) patch.superkey_qr_url = await SB.uploadFile("payment-uploads", "qr/superkey-qr", skFile, true);
+
+    await SB.update("payment_methods_settings", "id=eq.1", patch);
+    state.paymentMethods = { ...state.paymentMethods, ...patch };
+    renderPaymentMethodsSettings();
+    $("#pm-zaincash-qr-file").value = "";
+    $("#pm-superkey-qr-file").value = "";
+    toast("تم حفظ إعدادات الدفع", "ok");
+  } catch (err) {
+    console.error(err);
+    toast(`تعذر الحفظ: ${readableSupabaseError(err)}`, "bad");
+  } finally {
+    btn.disabled = false;
+    btn.textContent = "حفظ إعدادات الدفع";
+  }
+});
 
 // ---- حفظ أسعار الاشتراك ----
 $("#btn-save-sub-prices").addEventListener("click", async () => {
@@ -844,6 +905,8 @@ function renderSubscribeRequestsList() {
 
   if (!filtered.length) { host.innerHTML = `<p style="color:var(--ink-soft);font-size:13px;">لا توجد طلبات هنا حاليًا.</p>`; return; }
 
+  const providerLabel = { zaincash: "زين كاش", superkey: "سوبر كي", card: "بطاقة" };
+
   host.innerHTML = filtered.map(r => `
     <div class="panel" style="margin-bottom:10px;border:1px solid var(--line);">
       <div style="display:flex;justify-content:space-between;align-items:flex-start;flex-wrap:wrap;gap:10px;">
@@ -853,14 +916,17 @@ function renderSubscribeRequestsList() {
             ${escapeHtml(r.governorate)} - ${escapeHtml(r.area)} · ${r.subscription_type === "year" ? "سنوي" : "شهري"} ·
             ${Number(r.price).toLocaleString("en-US")} د.ع
             ${r.discount_code ? ` · كود: ${escapeHtml(r.discount_code)}` : ""}
+            ${r.payment_method ? ` · عبر ${providerLabel[r.payment_method] || escapeHtml(r.payment_method)}` : ""}
             · ${new Date(r.created_at).toLocaleString("ar-IQ")}
           </div>
+          ${r.transfer_screenshot_url ? `<a href="${r.transfer_screenshot_url}" target="_blank" rel="noopener" style="display:inline-block;margin-top:8px;"><img src="${r.transfer_screenshot_url}" style="max-width:90px;border-radius:8px;border:1px solid var(--line);" /></a>` : ""}
+          ${r.transfer_reference_name ? `<div style="font-size:12.5px;color:var(--ink-soft);margin-top:6px;">اسم/رقم العملية: <b>${escapeHtml(r.transfer_reference_name)}</b></div>` : ""}
         </div>
         <div style="display:flex;align-items:center;gap:8px;">
-          <span class="badge ${r.status === "paid" ? "ok" : r.status === "failed" ? "bad" : "wait"}">${r.status === "paid" ? "مفعّل" : r.status === "failed" ? "مرفوض" : "قيد الانتظار"}</span>
+          <span class="badge ${r.status === "paid" ? "ok" : "wait"}">${r.status === "paid" ? "مفعّل" : "قيد الانتظار"}</span>
           ${r.status === "pending" ? `
-            <button class="btn btn-primary btn-sm" data-activate-sub="${r.id}" style="width:auto;padding:7px 14px;">تفعيل</button>
-            <button class="btn btn-bad btn-sm" data-reject-sub="${r.id}" style="width:auto;padding:7px 14px;">رفض</button>
+            <button class="btn btn-primary btn-sm" data-activate-sub="${r.id}" style="width:auto;padding:7px 14px;">موافقة</button>
+            <button class="btn btn-outline btn-sm" data-contact-sub="${escapeHtml(r.phone)}" style="width:auto;padding:7px 14px;">تواصل</button>
           ` : ""}
         </div>
       </div>
@@ -869,7 +935,7 @@ function renderSubscribeRequestsList() {
 
 $("#subscribe-requests-list").addEventListener("click", async (e) => {
   const activateId = e.target.dataset.activateSub;
-  const rejectId = e.target.dataset.rejectSub;
+  const contactPhone = e.target.dataset.contactSub;
 
   if (activateId) {
     const req = state.subscribeRequests.find(r => r.id === activateId);
@@ -892,18 +958,10 @@ $("#subscribe-requests-list").addEventListener("click", async (e) => {
     }
   }
 
-  if (rejectId) {
-    if (!confirm("تأكيد رفض هذا الطلب؟")) return;
-    try {
-      await SB.update("subscribe", `id=eq.${rejectId}`, { status: "failed", reviewed_at: new Date().toISOString() });
-      const req = state.subscribeRequests.find(r => r.id === rejectId);
-      if (req) req.status = "failed";
-      renderSubscribeRequestsList();
-      toast("تم رفض الطلب", "ok");
-    } catch (err) {
-      console.error(err);
-      toast("تعذر رفض الطلب", "bad");
-    }
+  if (contactPhone) {
+    // يفتح محادثة واتساب مباشرة مع نفس الرقم المضاف بالطلب
+    const digits = contactPhone.replace(/\D/g, "").replace(/^0/, "964");
+    window.open(`https://wa.me/${digits}`, "_blank", "noopener");
   }
 });
 
