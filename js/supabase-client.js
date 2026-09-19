@@ -47,6 +47,28 @@ const SB = {
     if (!res.ok) throw new Error(await res.text());
     return true;
   },
+
+  // رفع ملف لـ Supabase Storage (bucket عام). upsert=true يستبدل نفس المسار
+  // إن وُجد مسبقًا (مفيد لصور QR الثابتة بلوحة الأدمن)، false ينشئ ملفًا
+  // جديدًا فقط (مفيد لصور إيصالات التحويل بمسارات فريدة).
+  async uploadFile(bucket, path, file, upsert = false) {
+    const res = await fetch(`${SUPABASE_CONFIG.url}/storage/v1/object/${bucket}/${path}`, {
+      method: "POST",
+      headers: {
+        apikey: SUPABASE_CONFIG.anonKey,
+        Authorization: `Bearer ${SUPABASE_CONFIG.anonKey}`,
+        "Content-Type": file.type || "application/octet-stream",
+        ...(upsert ? { "x-upsert": "true" } : {}),
+      },
+      body: file,
+    });
+    if (!res.ok) throw new Error(await res.text());
+    return this.publicUrl(bucket, path);
+  },
+
+  publicUrl(bucket, path) {
+    return `${SUPABASE_CONFIG.url}/storage/v1/object/public/${bucket}/${path}`;
+  },
 };
 
 // =========================================================
