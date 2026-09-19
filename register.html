@@ -126,12 +126,12 @@
       <p style="margin:0 0 18px;color:var(--ink-soft);font-size:13.5px;">
         تم تفعيل خطتك المجانية لمدة 7 أيام. يمكنك الآن تسجيل الدخول.
       </p>
-      <a href="index.html" class="btn btn-primary" style="display:block;">الذهاب لتسجيل الدخول</a>
+      <a href="app.html" class="btn btn-primary" style="display:block;">الذهاب لتسجيل الدخول</a>
     </div>
 
     <div class="login-foot">
       لديك حساب بالفعل؟
-      <a href="index.html" style="color:var(--palm-deep);text-decoration:underline;font-weight:800;">تسجيل دخول</a>
+      <a href="app.html" style="color:var(--palm-deep);text-decoration:underline;font-weight:800;">تسجيل دخول</a>
     </div>
   </div>
 </div>
@@ -275,7 +275,7 @@ $("#reg-form").addEventListener("submit", async (e) => {
     const rows = await SB.select("stores", `phone=eq.${encodeURIComponent(phone)}&select=phone`);
 
     if (rows.length > 0) {
-      showAlert(`هذا الرقم مسجل مسبقاً، قم <a href="index.html">بتسجيل الدخول</a>`);
+      showAlert(`هذا الرقم مسجل مسبقاً، قم <a href="app.html">بتسجيل الدخول</a>`);
       return;
     }
 
