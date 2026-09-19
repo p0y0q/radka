@@ -166,6 +166,51 @@
 
         <div class="panel">
           <div class="panel-head">
+            <div><h3>طرق الدفع</h3><div class="sub">فعّل أو عطّل أي طريقة دفع بضغطة زر</div></div>
+          </div>
+
+          <div class="checkbox-row" style="justify-content:space-between;padding:10px 0;border-bottom:1px solid var(--line);">
+            <span>الدفع بالبطاقة (Visa/Mastercard)</span>
+            <label class="switch"><input type="checkbox" id="pm-card-enabled" /><span class="slider"></span></label>
+          </div>
+          <div class="checkbox-row" style="justify-content:space-between;padding:10px 0;border-bottom:1px solid var(--line);">
+            <span>التحويل المباشر (زين كاش / سوبر كي)</span>
+            <label class="switch"><input type="checkbox" id="pm-transfer-enabled" /><span class="slider"></span></label>
+          </div>
+          <div class="checkbox-row" style="justify-content:space-between;padding:10px 0;border-bottom:1px solid var(--line);">
+            <span>خيار زين كاش</span>
+            <label class="switch"><input type="checkbox" id="pm-zaincash-enabled" /><span class="slider"></span></label>
+          </div>
+          <div class="checkbox-row" style="justify-content:space-between;padding:10px 0;margin-bottom:16px;">
+            <span>خيار سوبر كي</span>
+            <label class="switch"><input type="checkbox" id="pm-superkey-enabled" /><span class="slider"></span></label>
+          </div>
+
+          <div class="form-grid" style="grid-template-columns:1fr 1fr;gap:14px;">
+            <div class="field">
+              <label>رقم محفظة زين كاش</label>
+              <input type="text" id="pm-zaincash-number" placeholder="0790xxxxxxx" />
+            </div>
+            <div class="field">
+              <label>رقم محفظة سوبر كي</label>
+              <input type="text" id="pm-superkey-number" placeholder="0790xxxxxxx" />
+            </div>
+            <div class="field">
+              <label>صورة QR — زين كاش</label>
+              <input type="file" id="pm-zaincash-qr-file" accept="image/*" />
+              <img id="pm-zaincash-qr-preview" style="max-width:100px;margin-top:8px;border:1px solid var(--line);border-radius:8px;" />
+            </div>
+            <div class="field">
+              <label>صورة QR — سوبر كي</label>
+              <input type="file" id="pm-superkey-qr-file" accept="image/*" />
+              <img id="pm-superkey-qr-preview" style="max-width:100px;margin-top:8px;border:1px solid var(--line);border-radius:8px;" />
+            </div>
+          </div>
+          <button class="btn btn-primary btn-sm" id="btn-save-payment-methods" style="width:auto;">حفظ إعدادات الدفع</button>
+        </div>
+
+        <div class="panel">
+          <div class="panel-head">
             <div><h3>أكواد الخصم</h3><div class="sub" id="discount-codes-count-label">0 كود</div></div>
           </div>
           <div class="form-grid" style="grid-template-columns:2fr 1fr 1fr auto;gap:10px;align-items:end;margin-bottom:16px;">
